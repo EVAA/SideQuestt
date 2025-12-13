@@ -1,6 +1,140 @@
-body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
-header { padding: 12px; display: grid; gap: 8px; }
-.row { display: flex; gap: 8px; }
-button { padding: 10px 12px; font-size: 16px; }
-#map { height: 70vh; }
-#out { margin: 0; padding: 12px; background: #f6f6f6; white-space: pre-wrap; }
+:root{
+  --bg: #f6f7fb;
+  --card: #ffffff;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: rgba(17,24,39,0.08);
+  --shadow: 0 10px 30px rgba(17,24,39,0.10);
+  --shadow2: 0 6px 16px rgba(17,24,39,0.10);
+  --radius: 16px;
+
+  --grad: linear-gradient(90deg, #7c3aed 0%, #ec4899 50%, #22c55e 100%);
+  --grad2: linear-gradient(135deg, #7c3aed 0%, #3b82f6 55%, #22c55e 100%);
+}
+
+*{ box-sizing: border-box; }
+html, body { height: 100%; }
+body{
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: var(--bg);
+  color: var(--text);
+}
+
+header{
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgba(246,247,251,0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+
+.header-inner{
+  padding: 12px 14px 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.brand{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.title{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.badge{
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: var(--grad2);
+  box-shadow: var(--shadow2);
+}
+
+h1{
+  margin: 0;
+  font-size: 16px;
+  letter-spacing: 0.2px;
+}
+
+.sub{
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.controls{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+button{
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  padding: 12px 12px;
+  font-size: 14px;
+  border-radius: 14px;
+  box-shadow: var(--shadow2);
+  cursor: pointer;
+  transition: transform 0.08s ease, filter 0.12s ease, opacity 0.12s ease;
+}
+
+button:active{ transform: translateY(1px); }
+button:disabled{ opacity: 0.55; cursor: not-allowed; }
+
+button.primary{
+  border: none;
+  background: var(--grad);
+  color: white;
+  box-shadow: 0 10px 24px rgba(124,58,237,0.25);
+}
+
+button.ghost{
+  background: transparent;
+  box-shadow: none;
+}
+
+#map{
+  height: calc(100vh - 170px);
+}
+
+.panel{
+  margin: 12px 14px 16px;
+  padding: 12px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+#out{
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  color: #0f172a;
+}
+
+.leaflet-control-attribution{
+  background: rgba(255,255,255,0.85) !important;
+  border: 1px solid rgba(17,24,39,0.08) !important;
+  border-radius: 12px !important;
+  padding: 4px 8px !important;
+}
+
+.leaflet-popup-content-wrapper, .leaflet-popup-tip{
+  background: #ffffff !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(17,24,39,0.10) !important;
+  box-shadow: var(--shadow2) !important;
+}
+

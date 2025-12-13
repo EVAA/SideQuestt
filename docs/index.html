@@ -10,13 +10,32 @@
 </head>
 <body>
   <header>
-    <h1>SideQuest</h1>
-    <div class="row">
-      <button id="loc-btn">Use my location</button>
-      <button id="load-small-btn">Load POI_small.csv</button>
-      <button id="route-btn" disabled>Generate route (NN)</button>
-
+  <div class="header-inner">
+    <div class="brand">
+      <div class="title">
+        <div class="badge"></div>
+        <div>
+          <h1>SideQuest</h1>
+          <p class="sub">Toronto • route prototype</p>
+        </div>
+      </div>
+      <button class="ghost" id="clear-btn">Clear</button>
     </div>
+
+    <div class="controls">
+      <button id="loc-btn">Use my location</button>
+      <button id="load-small-btn">Load POI_small</button>
+      <button class="primary" id="route-btn" disabled>Generate route (NN)</button>
+      <button id="noop-btn" disabled>Next: 2-opt</button>
+    </div>
+  </div>
+</header>
+
+<div id="map"></div>
+
+<div class="panel">
+  <pre id="out">Load POIs to begin.</pre>
+</div>
 
   </header>
 

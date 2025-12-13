@@ -8,11 +8,16 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 let userMarker = null;
 let poiLayer = L.layerGroup().addTo(map);
-
 let currPois = [];
+let currOrder = [];
 let routeLine = null;
 
 function log(s) { out.textContent = s; }
+
+function setDisabled(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.disabled = v;
+}
 
 function parseCsv(text) {
   const lines = text.trim().split(/\r?\n/);
@@ -45,14 +50,21 @@ function parseCsv(text) {
   return pois;
 }
 
-async function loadCsv(path) {
+async function loadText(path) {
   const res = await fetch(path, { cache: "no-store" });
   if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
   return await res.text();
 }
 
+function clearRoute() {
+  if (routeLine) map.removeLayer(routeLine);
+  routeLine = null;
+  currOrder = [];
+}
+
 function plotPois(pois) {
   poiLayer.clearLayers();
+  clearRoute();
 
   let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
 
@@ -78,11 +90,11 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   const dp = toRad(lat2 - lat1);
   const dl = toRad(lon2 - lon1);
 
-  const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function nnOrder(pois, startIdx=0) {
+function nnOrder(pois, startIdx = 0) {
   const n = pois.length;
   const rem = new Set([...Array(n).keys()].filter(i => i !== startIdx));
   const order = [startIdx];
@@ -95,7 +107,6 @@ function nnOrder(pois, startIdx=0) {
       const d = haversineKm(pois[last].lat, pois[last].lon, pois[j].lat, pois[j].lon);
       if (d < bestD) { bestD = d; best = j; }
     }
-
     order.push(best);
     rem.delete(best);
   }
@@ -120,53 +131,77 @@ function drawRoute(order, pois) {
   routeLine = L.polyline(pts).addTo(map);
 }
 
-document.getElementById("loc-btn").addEventListener("click", () => {
-  if (!navigator.geolocation) return log("Geolocation not supported.");
-
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
-
-      if (userMarker) map.removeLayer(userMarker);
-      userMarker = L.marker([lat, lon]).addTo(map).bindPopup("You").openPopup();
-      map.setView([lat, lon], 15);
-
-      log(`Location: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
-    },
-    (err) => log(`Location error: ${err.message}`)
-  );
-});
-
-document.getElementById("load-small-btn").addEventListener("click", async () => {
-  try {
-    log("Loading POI_small.csv ...");
-
-    const text = await loadCsv("data/POI_small.csv");
-    const pois = parseCsv(text);
-
-    currPois = pois;
-    plotPois(currPois);
-
-    const rb = document.getElementById("route-btn");
-    rb.disabled = false;
-    log(`Loaded ${currPois.length} POIs.`);
-  } catch (e) {
-    log(`Error: ${e.message}`);
-  }
-});
-
-document.getElementById("route-btn").addEventListener("click", () => {
-  if (currPois.length < 2) return;
-
-  const order = nnOrder(currPois, 0);
-  const km = routeLengthKm(order, currPois);
-  drawRoute(order, currPois);
-
+function formatRoute(order, pois, km) {
   const lines = [];
   lines.push(`Route (NN), start = POI[0], total: ${km.toFixed(2)} km`);
   lines.push("");
-  order.forEach((idx, k) => lines.push(`${k+1}. ${currPois[idx].name}`));
-  log(lines.join("\n"));
-});
+  order.forEach((idx, k) => lines.push(`${k + 1}. ${pois[idx].name}`));
+  return lines.join("\n");
+}
+
+function bindUI() {
+  const locBtn = document.getElementById("loc-btn");
+  if (locBtn) {
+    locBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) return log("Geolocation not supported.");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lon = pos.coords.longitude;
+
+          if (userMarker) map.removeLayer(userMarker);
+          userMarker = L.marker([lat, lon]).addTo(map).bindPopup("You").openPopup();
+          map.setView([lat, lon], 15);
+
+          log(`Location: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+        },
+        (err) => log(`Location error: ${err.message}`)
+      );
+    });
+  }
+
+  const loadBtn = document.getElementById("load-small-btn");
+  if (loadBtn) {
+    loadBtn.addEventListener("click", async () => {
+      try {
+        setDisabled("route-btn", true);
+        log("Loading POI_small.csv ...");
+
+        const text = await loadText("data/POI_small.csv");
+        currPois = parseCsv(text);
+
+        plotPois(currPois);
+        setDisabled("route-btn", currPois.length < 2);
+
+        log(`Loaded ${currPois.length} POIs.`);
+      } catch (e) {
+        log(`Error: ${e.message}`);
+      }
+    });
+  }
+
+  const routeBtn = document.getElementById("route-btn");
+  if (routeBtn) {
+    routeBtn.addEventListener("click", () => {
+      if (currPois.length < 2) return;
+
+      currOrder = nnOrder(currPois, 0);
+      const km = routeLengthKm(currOrder, currPois);
+
+      drawRoute(currOrder, currPois);
+      log(formatRoute(currOrder, currPois, km));
+    });
+  }
+
+  const clearBtn = document.getElementById("clear-btn");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      clearRoute();
+      log("Cleared route.");
+    });
+  }
+}
+
+bindUI();
+log("Load POIs to begin.");
 
