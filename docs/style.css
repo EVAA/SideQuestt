@@ -217,6 +217,130 @@ button.ghost{
   color: var(--muted);
 }
 
+
+/* ===== Fun route bubbles ===== */
+
+.route-header{
+  padding: 12px 12px;
+  border-radius: 16px;
+  color: white;
+  background: linear-gradient(135deg, #7c3aed 0%, #ec4899 45%, #22c55e 100%);
+  box-shadow: 0 12px 24px rgba(124,58,237,0.22);
+  position: relative;
+  overflow: hidden;
+}
+
+.route-header::after{
+  content: "";
+  position: absolute;
+  inset: -40px -60px auto auto;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.40), rgba(255,255,255,0) 60%);
+  transform: rotate(12deg);
+  pointer-events: none;
+}
+
+.route-header .title{
+  margin: 0;
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.route-header .meta{
+  margin-top: 6px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  opacity: 0.95;
+}
+
+.chip{
+  background: rgba(255,255,255,0.20);
+  border: 1px solid rgba(255,255,255,0.25);
+  padding: 6px 10px;
+  border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+
+.route-bubbles{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.bubble{
+  position: relative;
+  padding: 12px 12px 12px 52px;
+  border-radius: 18px;
+  border: 1px solid rgba(17,24,39,0.08);
+  background: #fff;
+  box-shadow: 0 10px 20px rgba(17,24,39,0.08);
+}
+
+.bubble::before{
+  content: "";
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #7c3aed 0%, #3b82f6 55%, #22c55e 100%);
+  transform: translateY(-50%);
+  box-shadow: 0 8px 16px rgba(59,130,246,0.25);
+}
+
+.bubble .num{
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 12px;
+  color: white;
+  background: linear-gradient(135deg, #7c3aed 0%, #ec4899 55%, #f59e0b 100%);
+  box-shadow: 0 10px 20px rgba(236,72,153,0.20);
+}
+
+.bubble .name{
+  font-weight: 750;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.bubble .hint{
+  margin-top: 2px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.arrow{
+  display: grid;
+  place-items: center;
+  height: 14px;
+  color: #7c3aed;
+  opacity: 0.9;
+}
+
+.arrow span{
+  font-size: 14px;
+  background: rgba(124,58,237,0.10);
+  border: 1px solid rgba(124,58,237,0.18);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+
 /* ================= LEAFLET TWEAKS ================= */
 
 .leaflet-control-attribution{

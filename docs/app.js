@@ -149,32 +149,38 @@ function renderRoute(order, pois, km) {
   const items = order.map((idx, k) => {
     const p = pois[idx];
     const sub = `(${p.lat.toFixed(4)}, ${p.lon.toFixed(4)})`;
-    return `
-      <li class="route-item">
-        <div class="badge-num">${k + 1}</div>
-        <div>
-          <div class="route-name">${safe(p.name)}</div>
-          <div class="route-sub">${sub}</div>
-        </div>
+
+    const bubble = `
+      <li class="bubble">
+        <div class="num">${k + 1}</div>
+        <div class="name">${safe(p.name)}</div>
+        <div class="hint">${sub}</div>
       </li>
     `;
+
+    const arrow = (k < order.length - 1)
+      ? `<div class="arrow"><span>↓</span></div>`
+      : "";
+
+    return bubble + arrow;
   }).join("");
 
   setOutHTML(`
-    <div class="out-title">Your route</div>
-    <div class="kpi">
-      <div>
-        <div class="label">Total distance</div>
-        <div class="value">${km.toFixed(2)} km</div>
-      </div>
-      <div>
-        <div class="label">Stops</div>
-        <div class="value">${order.length}</div>
+    <div class="route-header">
+      <div class="title">Route (NN)</div>
+      <div class="meta">
+        <div class="chip">Start: POI[0]</div>
+        <div class="chip">Distance: ${km.toFixed(2)} km</div>
+        <div class="chip">Stops: ${order.length}</div>
       </div>
     </div>
-    <ul class="route-list">${items}</ul>
+
+    <ol class="route-bubbles">
+      ${items}
+    </ol>
   `);
 }
+
 
 function bindUI() {
   const locBtn = document.getElementById("loc-btn");
