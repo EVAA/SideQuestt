@@ -148,7 +148,8 @@ document.getElementById("load-small-btn").addEventListener("click", async () => 
     currPois = pois;
     plotPois(currPois);
 
-    document.getElementById("route-btn").disabled = (currPois.length < 2);
+    const rb = document.getElementById("route-btn");
+    rb.disabled = false;
     log(`Loaded ${currPois.length} POIs.`);
   } catch (e) {
     log(`Error: ${e.message}`);
