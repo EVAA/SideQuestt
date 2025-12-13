@@ -12,11 +12,21 @@ let currPois = [];
 let currOrder = [];
 let routeLine = null;
 
-function log(s) { out.textContent = s; }
-
 function setDisabled(id, v) {
   const el = document.getElementById(id);
   if (el) el.disabled = v;
+}
+
+function setOutHTML(html) {
+  out.innerHTML = html;
+}
+
+function safe(s) {
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function parseCsv(text) {
@@ -131,19 +141,49 @@ function drawRoute(order, pois) {
   routeLine = L.polyline(pts).addTo(map);
 }
 
-function formatRoute(order, pois, km) {
-  const lines = [];
-  lines.push(`Route (NN), start = POI[0], total: ${km.toFixed(2)} km`);
-  lines.push("");
-  order.forEach((idx, k) => lines.push(`${k + 1}. ${pois[idx].name}`));
-  return lines.join("\n");
+function renderLoaded(n) {
+  setOutHTML(`<div class="out-title">Loaded ${n} POIs. Generate a route when ready.</div>`);
+}
+
+function renderRoute(order, pois, km) {
+  const items = order.map((idx, k) => {
+    const p = pois[idx];
+    const sub = `(${p.lat.toFixed(4)}, ${p.lon.toFixed(4)})`;
+    return `
+      <li class="route-item">
+        <div class="badge-num">${k + 1}</div>
+        <div>
+          <div class="route-name">${safe(p.name)}</div>
+          <div class="route-sub">${sub}</div>
+        </div>
+      </li>
+    `;
+  }).join("");
+
+  setOutHTML(`
+    <div class="out-title">Your route</div>
+    <div class="kpi">
+      <div>
+        <div class="label">Total distance</div>
+        <div class="value">${km.toFixed(2)} km</div>
+      </div>
+      <div>
+        <div class="label">Stops</div>
+        <div class="value">${order.length}</div>
+      </div>
+    </div>
+    <ul class="route-list">${items}</ul>
+  `);
 }
 
 function bindUI() {
   const locBtn = document.getElementById("loc-btn");
   if (locBtn) {
     locBtn.addEventListener("click", () => {
-      if (!navigator.geolocation) return log("Geolocation not supported.");
+      if (!navigator.geolocation) {
+        setOutHTML(`<div class="out-title">Geolocation not supported.</div>`);
+        return;
+      }
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude;
@@ -153,9 +193,9 @@ function bindUI() {
           userMarker = L.marker([lat, lon]).addTo(map).bindPopup("You").openPopup();
           map.setView([lat, lon], 15);
 
-          log(`Location: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+          setOutHTML(`<div class="out-title">Location set: ${lat.toFixed(5)}, ${lon.toFixed(5)}</div>`);
         },
-        (err) => log(`Location error: ${err.message}`)
+        (err) => setOutHTML(`<div class="out-title">Location error: ${safe(err.message)}</div>`)
       );
     });
   }
@@ -165,7 +205,7 @@ function bindUI() {
     loadBtn.addEventListener("click", async () => {
       try {
         setDisabled("route-btn", true);
-        log("Loading POI_small.csv ...");
+        setOutHTML(`<div class="out-title">Loading POI_small.csv ...</div>`);
 
         const text = await loadText("data/POI_small.csv");
         currPois = parseCsv(text);
@@ -173,9 +213,9 @@ function bindUI() {
         plotPois(currPois);
         setDisabled("route-btn", currPois.length < 2);
 
-        log(`Loaded ${currPois.length} POIs.`);
+        renderLoaded(currPois.length);
       } catch (e) {
-        log(`Error: ${e.message}`);
+        setOutHTML(`<div class="out-title">Error: ${safe(e.message)}</div>`);
       }
     });
   }
@@ -189,7 +229,7 @@ function bindUI() {
       const km = routeLengthKm(currOrder, currPois);
 
       drawRoute(currOrder, currPois);
-      log(formatRoute(currOrder, currPois, km));
+      renderRoute(currOrder, currPois, km);
     });
   }
 
@@ -197,11 +237,10 @@ function bindUI() {
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
       clearRoute();
-      log("Cleared route.");
+      setOutHTML(`<div class="out-title">Cleared route.</div>`);
     });
   }
 }
 
 bindUI();
-log("Load POIs to begin.");
-
+setOutHTML(`<div class="out-title">Load POIs to begin.</div>`);

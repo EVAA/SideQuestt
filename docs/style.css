@@ -12,14 +12,22 @@
   --grad2: linear-gradient(135deg, #7c3aed 0%, #3b82f6 55%, #22c55e 100%);
 }
 
-*{ box-sizing: border-box; }
-html, body { height: 100%; }
+*{
+  box-sizing: border-box;
+}
+
+html, body{
+  height: 100%;
+}
+
 body{
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
   background: var(--bg);
   color: var(--text);
 }
+
+/* ================= HEADER ================= */
 
 header{
   position: sticky;
@@ -31,16 +39,15 @@ header{
 }
 
 .header-inner{
-  padding: 12px 14px 10px;
+  padding: 14px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .brand{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
 }
 
 .title{
@@ -69,6 +76,8 @@ h1{
   color: var(--muted);
 }
 
+/* ================= CONTROLS ================= */
+
 .controls{
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -80,21 +89,27 @@ button{
   border: 1px solid var(--border);
   background: var(--card);
   color: var(--text);
-  padding: 12px 12px;
+  padding: 12px;
   font-size: 14px;
   border-radius: 14px;
   box-shadow: var(--shadow2);
   cursor: pointer;
-  transition: transform 0.08s ease, filter 0.12s ease, opacity 0.12s ease;
+  transition: transform 0.08s ease, opacity 0.12s ease;
 }
 
-button:active{ transform: translateY(1px); }
-button:disabled{ opacity: 0.55; cursor: not-allowed; }
+button:active{
+  transform: translateY(1px);
+}
+
+button:disabled{
+  opacity: 0.55;
+  cursor: not-allowed;
+}
 
 button.primary{
   border: none;
   background: var(--grad);
-  color: white;
+  color: #ffffff;
   box-shadow: 0 10px 24px rgba(124,58,237,0.25);
 }
 
@@ -103,26 +118,106 @@ button.ghost{
   box-shadow: none;
 }
 
+/* ================= MAP ================= */
+
 #map{
-  height: calc(100vh - 170px);
+  height: calc(100vh - 180px);
 }
+
+/* ================= OUTPUT PANEL ================= */
 
 .panel{
   margin: 12px 14px 16px;
-  padding: 12px 12px;
+  padding: 12px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--card);
   box-shadow: var(--shadow);
 }
 
-#out{
-  margin: 0;
+/* ================= ROUTE OUTPUT ================= */
+
+.out{
+  display: grid;
+  gap: 12px;
+}
+
+.out-title{
+  font-weight: 650;
   font-size: 13px;
-  line-height: 1.35;
-  white-space: pre-wrap;
   color: #0f172a;
 }
+
+/* KPI summary */
+.kpi{
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(124,58,237,0.06);
+  border: 1px solid rgba(17,24,39,0.08);
+}
+
+.kpi .label{
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.kpi .value{
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+/* Route list */
+.route-list{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid rgba(17,24,39,0.08);
+  background: #ffffff;
+}
+
+.route-item{
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(17,24,39,0.06);
+}
+
+.route-item:first-child{
+  border-top: none;
+}
+
+.badge-num{
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 12px;
+  background: var(--grad2);
+}
+
+.route-name{
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.route-sub{
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ================= LEAFLET TWEAKS ================= */
 
 .leaflet-control-attribution{
   background: rgba(255,255,255,0.85) !important;
@@ -131,7 +226,8 @@ button.ghost{
   padding: 4px 8px !important;
 }
 
-.leaflet-popup-content-wrapper, .leaflet-popup-tip{
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip{
   background: #ffffff !important;
   color: var(--text) !important;
   border: 1px solid rgba(17,24,39,0.10) !important;
