@@ -26,8 +26,17 @@
       <div class="controls">
         <button id="loc-btn" type="button">Use my location</button>
         <button id="load-small-btn" type="button">Load POI_small</button>
-        <button class="primary" id="route-btn" type="button" disabled>Generate route (NN)</button>
-        <button id="noop-btn" type="button" disabled>Next: 2-opt</button>
+
+        <button class="primary" id="algo-nn" type="button" disabled>NN</button>
+        <button id="algo-2opt" type="button" disabled>NN + 2-opt</button>
+
+        <button id="algo-sa" type="button" disabled>SA</button>
+        <button id="algo-ga" type="button" disabled>GA-lite</button>
+      </div>
+
+      <div class="search">
+        <input id="search-q" type="text" placeholder="Search & add a new stop (e.g., 'Bar Raval', 'CN Tower')" />
+        <button id="search-add-btn" type="button">Add</button>
       </div>
     </div>
   </header>
