@@ -8,17 +8,18 @@ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
 
 let userMarker = null;
 let poiLayer = L.layerGroup().addTo(map);
+
 let currPois = [];
 let currOrder = [];
 let routeLine = null;
 
+function setOutHTML(html) {
+  out.innerHTML = html;
+}
+
 function setDisabled(id, v) {
   const el = document.getElementById(id);
   if (el) el.disabled = v;
-}
-
-function setOutHTML(html) {
-  out.innerHTML = html;
 }
 
 function safe(s) {
@@ -117,6 +118,7 @@ function nnOrder(pois, startIdx = 0) {
       const d = haversineKm(pois[last].lat, pois[last].lon, pois[j].lat, pois[j].lon);
       if (d < bestD) { bestD = d; best = j; }
     }
+
     order.push(best);
     rem.delete(best);
   }
@@ -174,22 +176,22 @@ function renderRoute(order, pois, km) {
         <div class="chip">Stops: ${order.length}</div>
       </div>
     </div>
-
     <ol class="route-bubbles">
       ${items}
     </ol>
   `);
 }
 
+function renderMsg(msg) {
+  setOutHTML(`<div class="out-title">${safe(msg)}</div>`);
+}
 
 function bindUI() {
   const locBtn = document.getElementById("loc-btn");
   if (locBtn) {
     locBtn.addEventListener("click", () => {
-      if (!navigator.geolocation) {
-        setOutHTML(`<div class="out-title">Geolocation not supported.</div>`);
-        return;
-      }
+      if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
+
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude;
@@ -199,9 +201,9 @@ function bindUI() {
           userMarker = L.marker([lat, lon]).addTo(map).bindPopup("You").openPopup();
           map.setView([lat, lon], 15);
 
-          setOutHTML(`<div class="out-title">Location set: ${lat.toFixed(5)}, ${lon.toFixed(5)}</div>`);
+          renderMsg(`Location set: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
         },
-        (err) => setOutHTML(`<div class="out-title">Location error: ${safe(err.message)}</div>`)
+        (err) => renderMsg(`Location error: ${err.message}`)
       );
     });
   }
@@ -211,7 +213,7 @@ function bindUI() {
     loadBtn.addEventListener("click", async () => {
       try {
         setDisabled("route-btn", true);
-        setOutHTML(`<div class="out-title">Loading POI_small.csv ...</div>`);
+        renderMsg("Loading POI_small.csv ...");
 
         const text = await loadText("data/POI_small.csv");
         currPois = parseCsv(text);
@@ -221,7 +223,7 @@ function bindUI() {
 
         renderLoaded(currPois.length);
       } catch (e) {
-        setOutHTML(`<div class="out-title">Error: ${safe(e.message)}</div>`);
+        renderMsg(`Error: ${e.message}`);
       }
     });
   }
@@ -243,10 +245,10 @@ function bindUI() {
   if (clearBtn) {
     clearBtn.addEventListener("click", () => {
       clearRoute();
-      setOutHTML(`<div class="out-title">Cleared route.</div>`);
+      renderMsg("Cleared route.");
     });
   }
 }
 
 bindUI();
-setOutHTML(`<div class="out-title">Load POIs to begin.</div>`);
+renderMsg("Load POIs to begin.");

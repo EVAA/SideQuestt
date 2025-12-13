@@ -12,13 +12,8 @@
   --grad2: linear-gradient(135deg, #7c3aed 0%, #3b82f6 55%, #22c55e 100%);
 }
 
-*{
-  box-sizing: border-box;
-}
-
-html, body{
-  height: 100%;
-}
+*{ box-sizing: border-box; }
+html, body{ height: 100%; }
 
 body{
   margin: 0;
@@ -27,7 +22,7 @@ body{
   color: var(--text);
 }
 
-/* ================= HEADER ================= */
+/* ===== HEADER ===== */
 
 header{
   position: sticky;
@@ -48,6 +43,7 @@ header{
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
 
 .title{
@@ -76,7 +72,7 @@ h1{
   color: var(--muted);
 }
 
-/* ================= CONTROLS ================= */
+/* ===== CONTROLS ===== */
 
 .controls{
   display: grid;
@@ -97,14 +93,8 @@ button{
   transition: transform 0.08s ease, opacity 0.12s ease;
 }
 
-button:active{
-  transform: translateY(1px);
-}
-
-button:disabled{
-  opacity: 0.55;
-  cursor: not-allowed;
-}
+button:active{ transform: translateY(1px); }
+button:disabled{ opacity: 0.55; cursor: not-allowed; }
 
 button.primary{
   border: none;
@@ -118,13 +108,13 @@ button.ghost{
   box-shadow: none;
 }
 
-/* ================= MAP ================= */
+/* ===== MAP ===== */
 
 #map{
   height: calc(100vh - 180px);
 }
 
-/* ================= OUTPUT PANEL ================= */
+/* ===== PANEL / OUTPUT ===== */
 
 .panel{
   margin: 12px 14px 16px;
@@ -134,8 +124,6 @@ button.ghost{
   background: var(--card);
   box-shadow: var(--shadow);
 }
-
-/* ================= ROUTE OUTPUT ================= */
 
 .out{
   display: grid;
@@ -147,76 +135,6 @@ button.ghost{
   font-size: 13px;
   color: #0f172a;
 }
-
-/* KPI summary */
-.kpi{
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(124,58,237,0.06);
-  border: 1px solid rgba(17,24,39,0.08);
-}
-
-.kpi .label{
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.kpi .value{
-  font-size: 13px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-/* Route list */
-.route-list{
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border-radius: 14px;
-  overflow: hidden;
-  border: 1px solid rgba(17,24,39,0.08);
-  background: #ffffff;
-}
-
-.route-item{
-  display: grid;
-  grid-template-columns: 32px 1fr;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border-top: 1px solid rgba(17,24,39,0.06);
-}
-
-.route-item:first-child{
-  border-top: none;
-}
-
-.badge-num{
-  width: 28px;
-  height: 28px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  color: #ffffff;
-  font-weight: 700;
-  font-size: 12px;
-  background: var(--grad2);
-}
-
-.route-name{
-  font-size: 13px;
-  font-weight: 600;
-  color: #0f172a;
-}
-
-.route-sub{
-  font-size: 12px;
-  color: var(--muted);
-}
-
 
 /* ===== Fun route bubbles ===== */
 
@@ -340,8 +258,7 @@ button.ghost{
   padding: 2px 10px;
 }
 
-
-/* ================= LEAFLET TWEAKS ================= */
+/* ===== Leaflet tweaks ===== */
 
 .leaflet-control-attribution{
   background: rgba(255,255,255,0.85) !important;
@@ -357,4 +274,3 @@ button.ghost{
   border: 1px solid rgba(17,24,39,0.10) !important;
   box-shadow: var(--shadow2) !important;
 }
-
