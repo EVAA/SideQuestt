@@ -1,4 +1,6 @@
 const out = document.getElementById("out");
+let currPois = [];
+
 
 const map = L.map("map").setView([43.6532, -79.3832], 13);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -61,6 +63,58 @@ function plotPois(pois) {
   }
   log(`Loaded ${pois.length} POIs.`);
 }
+currPois = pois;
+document.getElementById("route-btn").disabled = (currPois.length < 2);
+
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371.0;
+  const toRad = d => d * Math.PI / 180.0;
+  const p1 = toRad(lat1), p2 = toRad(lat2);
+  const dp = toRad(lat2 - lat1), dl = toRad(lon2 - lon1);
+  const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function nnOrder(pois, startIdx=0) {
+  const n = pois.length;
+  const rem = new Set([...Array(n).keys()].filter(i => i !== startIdx));
+  const order = [startIdx];
+
+  while (rem.size) {
+    const last = order[order.length - 1];
+    let best = null, bestD = Infinity;
+    for (const j of rem) {
+      const d = haversineKm(pois[last].lat, pois[last].lon, pois[j].lat, pois[j].lon);
+      if (d < bestD) { bestD = d; best = j; }
+    }
+    order.push(best);
+    rem.delete(best);
+  }
+  return order;
+}
+
+function routeLengthKm(order, pois) {
+  let tot = 0;
+  for (let i = 0; i < order.length; i++) {
+    const a = pois[order[i]];
+    const b = pois[order[(i+1) % order.length]];
+    tot += haversineKm(a.lat, a.lon, b.lat, b.lon);
+  }
+  return tot;
+}
+
+let routeLine = null;
+
+function drawRoute(order, pois) {
+  const pts = order.map(i => [pois[i].lat, pois[i].lon]);
+  pts.push([pois[order[0]].lat, pois[order[0]].lon]); // close loop
+  if (routeLine) map.removeLayer(routeLine);
+  routeLine = L.polyline(pts).addTo(map);
+}
+
+
+
 
 document.getElementById("loc-btn").addEventListener("click", () => {
   if (!navigator.geolocation) return log("Geolocation not supported.");
