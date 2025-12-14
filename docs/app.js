@@ -33,6 +33,8 @@ setBasemap(false);
 
 // Loop mode: true = return to start, false = end at last POI
 let loopMode = true;
+let lastOrder = null;
+let lastLabel = "";
 
 // ===== Layers / state =====
 let userMarker = null;
@@ -378,6 +380,35 @@ function renderRoute(order, label) {
     `);
   });
 
+  // If loop mode is ON, show returning to start as the final stop in the list
+if (loopMode && order.length) {
+  if (startMode === "user" && userLatLon) {
+    items.push(`
+      <li class="bubble">
+        <div class="num">${order.length + 2}</div>
+        <div>
+          <div class="name">Return to You</div>
+          <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
+        </div>
+        <div class="row-actions"></div>
+      </li>
+    `);
+  } else {
+    const p0 = currPois[order[0]];
+    items.push(`
+      <li class="bubble">
+        <div class="num">${order.length + 1}</div>
+        <div>
+          <div class="name">Return to ${safe(p0.name)}</div>
+          <div class="hint">${p0.lat.toFixed(4)}, ${p0.lon.toFixed(4)}</div>
+        </div>
+        <div class="row-actions"></div>
+      </li>
+    `);
+  }
+}
+
+
   setOutHTML(`
     <div class="route-header">
       <div class="title">${safe(label)}</div>
@@ -541,10 +572,19 @@ function bindUI() {
   updateLoopToggle();
 
   document.getElementById("loop-toggle")?.addEventListener("click", () => {
-    loopMode = !loopMode;
-    updateLoopToggle();
-    renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
-  });
+  loopMode = !loopMode;
+  updateLoopToggle();
+
+  // If we already have a route displayed, refresh the map + list
+  if (lastOrder && lastOrder.length) {
+    drawRoute(lastOrder);
+    renderRoute(lastOrder, lastLabel);
+    return;
+  }
+
+  renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
+});
+
 
   document.getElementById("start-toggle")?.addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
@@ -600,6 +640,8 @@ function bindUI() {
     recoLayer.clearLayers();
     searchLayer.clearLayers();
     clearRoute();
+    lastOrder = null;
+    lastLabel = "";
     setAlgoActive("");
     renderMsg("Cleared. Add stops or tap “Recommend nearby”.");
   });
@@ -669,7 +711,7 @@ function bindUI() {
     setAlgoActive("algo-nn");
     const order = getBaseOrder();
     drawRoute(order);
-    renderRoute(order, "Route (NN)");
+    renderRoute(order, lastLabel);
   });
 
   document.getElementById("algo-2opt")?.addEventListener("click", () => {
@@ -677,7 +719,7 @@ function bindUI() {
     setAlgoActive("algo-2opt");
     const order = twoOpt(getBaseOrder().slice());
     drawRoute(order);
-    renderRoute(order, "Route (NN + 2-opt)");
+    renderRoute(order, lastLabel);
   });
 
   document.getElementById("algo-sa")?.addEventListener("click", () => {
@@ -686,7 +728,7 @@ function bindUI() {
     const base = twoOpt(getBaseOrder().slice());
     const order = saOrder(base, 2500);
     drawRoute(order);
-    renderRoute(order, "Route (SA)");
+    renderRoute(order, lastLabel);
   });
 
   document.getElementById("algo-ga")?.addEventListener("click", () => {
@@ -694,7 +736,7 @@ function bindUI() {
     setAlgoActive("algo-ga");
     const order = gaLite(40);
     drawRoute(order);
-    renderRoute(order, "Route (GA-lite)");
+    renderRoute(order, lastLabel);
   });
 }
 
