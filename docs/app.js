@@ -1,4 +1,6 @@
+console.log("app.js loaded");
 const out = document.getElementById("out");
+
 
 // Toronto bounding box (SW, NE)
 const TORONTO_BOUNDS = {
@@ -759,5 +761,8 @@ qEl?.addEventListener("keydown", (e) => {
   });
 }
 
-bindUI();
-renderMsg("Add stops or tap “Recommend nearby”.");
+window.addEventListener("DOMContentLoaded", () => {
+  bindUI();
+  renderMsg("Add stops or tap “Recommend nearby”.");
+});
+
