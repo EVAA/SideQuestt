@@ -108,7 +108,7 @@ button.ghost{
   box-shadow: none;
 }
 
-/* ===== SEARCH BAR ===== */
+/* ===== SEARCH ===== */
 
 .search{
   display: grid;
@@ -126,14 +126,10 @@ button.ghost{
   outline: none;
 }
 
-.search input::placeholder{
-  color: rgba(107,114,128,0.9);
-}
-
 /* ===== MAP ===== */
 
 #map{
-  height: calc(100vh - 250px);
+  height: calc(100vh - 290px);
 }
 
 /* ===== PANEL / OUTPUT ===== */
@@ -147,11 +143,7 @@ button.ghost{
   box-shadow: var(--shadow);
 }
 
-.out{
-  display: grid;
-  gap: 12px;
-}
-
+.out{ display: grid; gap: 12px; }
 .out-title{
   font-weight: 650;
   font-size: 13px;
