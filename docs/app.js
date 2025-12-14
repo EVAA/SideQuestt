@@ -1,10 +1,15 @@
 const out = document.getElementById("out");
 
 const map = L.map("map").setView([43.6532, -79.3832], 13);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 19,
-  attribution: "&copy; OpenStreetMap"
-}).addTo(map);
+L.tileLayer(
+  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+  {
+    maxZoom: 20,
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  }
+).addTo(map);
+
 
 let userMarker = null;
 let poiLayer = L.layerGroup().addTo(map);
@@ -78,7 +83,13 @@ function plotPois(pois) {
   let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
 
   pois.forEach(p => {
-    L.marker([p.lat, p.lon]).addTo(poiLayer).bindPopup(p.name);
+    L.circleMarker([p.lat, p.lon], {
+  radius: 7,
+  weight: 2,
+  opacity: 0.9,
+  fillOpacity: 0.9
+}).addTo(poiLayer).bindPopup(p.name);
+
     minLat = Math.min(minLat, p.lat);
     maxLat = Math.max(maxLat, p.lat);
     minLon = Math.min(minLon, p.lon);
@@ -251,9 +262,16 @@ function gaLite(bestOf = 40) {
 function drawRoute(order) {
   const pts = order.map(i => [currPois[i].lat, currPois[i].lon]);
   pts.push([currPois[order[0]].lat, currPois[order[0]].lon]);
+
   if (routeLine) map.removeLayer(routeLine);
-  routeLine = L.polyline(pts).addTo(map);
+
+  routeLine = L.polyline(pts, {
+    weight: 7,
+    opacity: 0.95,
+    lineJoin: "round"
+  }).addTo(map);
 }
+
 
 function renderRoute(order, label) {
   const km = routeLengthKm(order);
@@ -345,7 +363,13 @@ function bindUI() {
         userLatLon = { lat, lon };
 
         if (userMarker) map.removeLayer(userMarker);
-        userMarker = L.marker([lat, lon]).addTo(map).bindPopup("You").openPopup();
+       userMarker = L.circleMarker([lat, lon], {
+  radius: 9,
+  weight: 3,
+  opacity: 1,
+  fillOpacity: 1
+}).addTo(map).bindPopup("You").openPopup();
+
         map.setView([lat, lon], 15);
 
         renderMsg(`Location set: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
