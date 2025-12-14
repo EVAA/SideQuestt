@@ -1,6 +1,8 @@
 const out = document.getElementById("out");
 
+// ===== Map (CARTO Voyager, no key) =====
 const map = L.map("map").setView([43.6532, -79.3832], 13);
+
 L.tileLayer(
   "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
   {
@@ -10,12 +12,10 @@ L.tileLayer(
   }
 ).addTo(map);
 
-
 let userMarker = null;
 let poiLayer = L.layerGroup().addTo(map);
-let searchLayer = L.layerGroup().addTo(map);
 let nearbyLayer = L.layerGroup().addTo(map);
-
+let searchLayer = L.layerGroup().addTo(map);
 
 let currPois = [];
 let routeLine = null;
@@ -23,19 +23,32 @@ let routeLine = null;
 let startMode = "poi0"; // "poi0" | "user"
 let userLatLon = null;
 
+// ===== UI helpers =====
 function setOutHTML(html) { out.innerHTML = html; }
 function safe(s) {
-  return String(s).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;");
+  return String(s)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
-function setDisabled(id, v) { const el = document.getElementById(id); if (el) el.disabled = v; }
-function enableAlgos(ok) {
-  ["algo-nn","algo-2opt","algo-sa","algo-ga"].forEach(id => setDisabled(id, !ok));
-}
-
 function renderMsg(msg) { setOutHTML(`<div class="out-title">${safe(msg)}</div>`); }
 
-function renderLoaded(n) { setOutHTML(`<div class="out-title">Loaded ${n} POIs. Pick an algorithm.</div>`); }
+function setDisabled(id, v) {
+  const el = document.getElementById(id);
+  if (el) el.disabled = v;
+}
+function enableAlgos(ok) {
+  ["algo-nn", "algo-2opt", "algo-sa", "algo-ga"].forEach(id => setDisabled(id, !ok));
+}
 
+function updateStartToggle() {
+  const btn = document.getElementById("start-toggle");
+  if (!btn) return;
+  btn.textContent = (startMode === "poi0") ? "Start: POI[0]" : "Start: My Location";
+}
+
+// ===== CSV =====
 function parseCsv(text) {
   const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return [];
@@ -73,6 +86,7 @@ async function loadText(path) {
   return await res.text();
 }
 
+// ===== Plotting =====
 function clearRoute() {
   if (routeLine) map.removeLayer(routeLine);
   routeLine = null;
@@ -86,11 +100,11 @@ function plotPois(pois) {
 
   pois.forEach(p => {
     L.circleMarker([p.lat, p.lon], {
-  radius: 7,
-  weight: 2,
-  opacity: 0.9,
-  fillOpacity: 0.9
-}).addTo(poiLayer).bindPopup(p.name);
+      radius: 7,
+      weight: 2,
+      opacity: 0.9,
+      fillOpacity: 0.9
+    }).addTo(poiLayer).bindPopup(p.name);
 
     minLat = Math.min(minLat, p.lat);
     maxLat = Math.max(maxLat, p.lat);
@@ -98,20 +112,19 @@ function plotPois(pois) {
     maxLon = Math.max(maxLon, p.lon);
   });
 
-  if (pois.length) map.fitBounds([[minLat, minLon], [maxLat, maxLon]], { padding: [20, 20] });
+  if (pois.length) {
+    map.fitBounds([[minLat, minLon], [maxLat, maxLon]], { padding: [20, 20] });
+  }
 }
 
-/* ===== Distance ===== */
-
+// ===== Distances =====
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371.0;
   const toRad = d => d * Math.PI / 180.0;
-
   const p1 = toRad(lat1), p2 = toRad(lat2);
   const dp = toRad(lat2 - lat1), dl = toRad(lon2 - lon1);
-
-  const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function distPois(i, j) {
@@ -119,42 +132,31 @@ function distPois(i, j) {
   return haversineKm(a.lat, a.lon, b.lat, b.lon);
 }
 
-function distFromStartTo(i) {
-  if (startMode === "poi0" || !userLatLon) return distPois(0, i);
+function distFromUserToIdx(i) {
+  if (!userLatLon) return Infinity;
   return haversineKm(userLatLon.lat, userLatLon.lon, currPois[i].lat, currPois[i].lon);
 }
 
+// Route length: if start=user => user -> first -> ... -> last -> user
 function routeLengthKm(order) {
   if (!order.length) return 0;
 
-  // If starting from user, compute: user -> first -> ... -> last -> user
   if (startMode === "user" && userLatLon) {
     let tot = 0;
-
-    // user -> first
     tot += haversineKm(userLatLon.lat, userLatLon.lon, currPois[order[0]].lat, currPois[order[0]].lon);
-
-    // between POIs
-    for (let i = 0; i < order.length - 1; i++) {
-      tot += distPois(order[i], order[i + 1]);
-    }
-
-    // last -> user
+    for (let i = 0; i < order.length - 1; i++) tot += distPois(order[i], order[i + 1]);
     tot += haversineKm(userLatLon.lat, userLatLon.lon, currPois[order[order.length - 1]].lat, currPois[order[order.length - 1]].lon);
-
     return tot;
   }
 
-  // Default: closed tour over POIs (start = POI[0])
+  // closed tour on POIs
   let tot = 0;
   for (let i = 0; i < order.length - 1; i++) tot += distPois(order[i], order[i + 1]);
   tot += distPois(order[order.length - 1], order[0]);
   return tot;
 }
 
-
-/* ===== Algorithms ===== */
-
+// ===== Algorithms =====
 function nnOrder(startIdx = 0) {
   const n = currPois.length;
   const rem = new Set([...Array(n).keys()].filter(i => i !== startIdx));
@@ -175,13 +177,13 @@ function nnOrder(startIdx = 0) {
 }
 
 function nnOrderFromUser() {
-  // pick first stop closest to user, then NN over remaining
   const n = currPois.length;
   let first = 0, best = Infinity;
   for (let i = 0; i < n; i++) {
-    const d = distFromStartTo(i);
+    const d = distFromUserToIdx(i);
     if (d < best) { best = d; first = i; }
   }
+
   const rem = new Set([...Array(n).keys()].filter(i => i !== first));
   const order = [first];
 
@@ -198,6 +200,11 @@ function nnOrderFromUser() {
   return order;
 }
 
+function getBaseOrder() {
+  if (startMode === "user" && userLatLon) return nnOrderFromUser();
+  return nnOrder(0);
+}
+
 function twoOpt(order) {
   const n = order.length;
   let improved = true;
@@ -210,7 +217,7 @@ function twoOpt(order) {
         const c = order[k], d = order[k + 1];
 
         const before = distPois(a, b) + distPois(c, d);
-        const after  = distPois(a, c) + distPois(b, d);
+        const after = distPois(a, c) + distPois(b, d);
 
         if (after + 1e-12 < before) {
           const seg = order.slice(i, k + 1).reverse();
@@ -253,6 +260,7 @@ function saOrder(baseOrder, iters = 2500) {
     }
     T *= cool;
   }
+
   return best;
 }
 
@@ -267,7 +275,7 @@ function gaLite(bestOf = 40) {
     }
   }
 
-  let best = twoOpt((startMode === "user" && userLatLon) ? nnOrderFromUser() : nnOrder(0));
+  let best = twoOpt(getBaseOrder().slice());
   let bestCost = routeLengthKm(best);
 
   for (let r = 0; r < bestOf; r++) {
@@ -280,27 +288,24 @@ function gaLite(bestOf = 40) {
   return best;
 }
 
-/* ===== Draw + output ===== */
-
+// ===== Draw + Output =====
 function drawRoute(order) {
   if (!order.length) return;
 
   let pts = [];
 
   if (startMode === "user" && userLatLon) {
-    pts.push([userLatLon.lat, userLatLon.lon]); // start at user
+    pts.push([userLatLon.lat, userLatLon.lon]);
     pts.push(...order.map(i => [currPois[i].lat, currPois[i].lon]));
-    pts.push([userLatLon.lat, userLatLon.lon]); // end at user
+    pts.push([userLatLon.lat, userLatLon.lon]);
   } else {
     pts = order.map(i => [currPois[i].lat, currPois[i].lon]);
-    pts.push([currPois[order[0]].lat, currPois[order[0]].lon]); // close loop
+    pts.push([currPois[order[0]].lat, currPois[order[0]].lon]);
   }
 
   if (routeLine) map.removeLayer(routeLine);
   routeLine = L.polyline(pts, { weight: 7, opacity: 0.95, lineJoin: "round" }).addTo(map);
 }
-
-
 
 function renderRoute(order, label) {
   const km = routeLengthKm(order);
@@ -308,7 +313,6 @@ function renderRoute(order, label) {
 
   const items = [];
 
-  // Add "You" as first bubble if starting from user
   if (startMode === "user" && userLatLon) {
     items.push(`
       <li class="bubble">
@@ -320,7 +324,6 @@ function renderRoute(order, label) {
     `);
   }
 
-  // Then list the POIs
   order.forEach((idx, k) => {
     const p = currPois[idx];
     const sub = `(${p.lat.toFixed(4)}, ${p.lon.toFixed(4)})`;
@@ -336,37 +339,30 @@ function renderRoute(order, label) {
     `);
   });
 
+  const stopsShown = (startMode === "user" && userLatLon) ? (order.length + 1) : order.length;
+
   setOutHTML(`
     <div class="route-header">
       <div class="title">${safe(label)}</div>
       <div class="meta">
         <div class="chip">Start: ${safe(startLabel)}</div>
         <div class="chip">Distance: ${km.toFixed(2)} km</div>
-        <div class="chip">Stops: ${(startMode === "user" && userLatLon) ? (order.length + 1) : order.length}</div>
+        <div class="chip">Stops: ${stopsShown}</div>
       </div>
     </div>
     <ol class="route-bubbles">${items.join("")}</ol>
   `);
 }
 
+// ===== Add POIs =====
+function addPOI(name, lat, lon) {
+  currPois.push({ name, lat, lon });
+  plotPois(currPois);
+  enableAlgos(currPois.length >= 2);
+  renderMsg(`Added: ${name}`);
+}
 
-  const startLabel = (startMode === "user" && userLatLon) ? "My Location" : "POI[0]";
-
-  setOutHTML(`
-    <div class="route-header">
-      <div class="title">${safe(label)}</div>
-      <div class="meta">
-        <div class="chip">Start: ${safe(startLabel)}</div>
-        <div class="chip">Distance: ${km.toFixed(2)} km</div>
-        <div class="chip">Stops: ${order.length}</div>
-      </div>
-    </div>
-    <ol class="route-bubbles">${items}</ol>
-  `);
-
-
-/* ===== Search add ===== */
-
+// ===== Nominatim search (single result) =====
 async function nominatimSearch(q) {
   const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
   const res = await fetch(url, { headers: { "Accept": "application/json" } });
@@ -376,7 +372,7 @@ async function nominatimSearch(q) {
   return js[0];
 }
 
-
+// ===== Overpass (nearby cafes) =====
 async function overpassQuery(query) {
   const url = "https://overpass-api.de/api/interpreter";
   const res = await fetch(url, {
@@ -386,21 +382,6 @@ async function overpassQuery(query) {
   });
   if (!res.ok) throw new Error(`Overpass failed: ${res.status}`);
   return await res.json();
-}
-
-function metersToKm(m) { return m / 1000.0; }
-
-function renderNearbyCard(n, radiusM) {
-  setOutHTML(`
-    <div class="route-header">
-      <div class="title">Nearby cafés</div>
-      <div class="meta">
-        <div class="chip">Found: ${n}</div>
-        <div class="chip">Radius: ${metersToKm(radiusM).toFixed(1)} km</div>
-      </div>
-    </div>
-    <div class="out-title">Tap a marker to add it to your route (or use search).</div>
-  `);
 }
 
 function addNearbyMarker(p) {
@@ -429,33 +410,27 @@ function addNearbyMarker(p) {
   });
 }
 
-function addPOI(name, lat, lon) {
-  currPois.push({ name, lat, lon });
-  plotPois(currPois);
-  enableAlgos(currPois.length >= 2);
-  renderMsg(`Added: ${name}`);
+// ===== Bind UI =====
+async function loadDataset(path, label) {
+  try {
+    enableAlgos(false);
+    renderMsg(`Loading ${label} ...`);
+    const text = await loadText(path);
+    currPois = parseCsv(text);
+
+    plotPois(currPois);
+    enableAlgos(currPois.length >= 2);
+    renderMsg(`Loaded ${currPois.length} POIs. Pick an algorithm.`);
+  } catch (e) {
+    renderMsg(`Error: ${e.message}`);
+  }
 }
-
-/* ===== Start toggle ===== */
-
-function updateStartToggle() {
-  const btn = document.getElementById("start-toggle");
-  if (!btn) return;
-  btn.textContent = startMode === "poi0" ? "Start: POI[0]" : "Start: My Location";
-}
-
-function getBaseOrder() {
-  if (startMode === "user" && userLatLon) return nnOrderFromUser();
-  return nnOrder(0);
-}
-
-/* ===== Bind UI ===== */
 
 function bindUI() {
   enableAlgos(false);
   updateStartToggle();
 
-  // Toggle start mode
+  // start toggle
   document.getElementById("start-toggle").addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
     updateStartToggle();
@@ -465,7 +440,7 @@ function bindUI() {
     );
   });
 
-  // Get user location
+  // location
   document.getElementById("loc-btn").addEventListener("click", () => {
     if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
 
@@ -473,7 +448,6 @@ function bindUI() {
       (pos) => {
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
-
         userLatLon = { lat, lon };
 
         if (userMarker) map.removeLayer(userMarker);
@@ -491,14 +465,85 @@ function bindUI() {
     );
   });
 
-  // Nearby cafes (Overpass)
-  document.getElementById("nearby-cafes-btn").addEventListener("click", async () => {
+  // load buttons
+  document.getElementById("load-small-btn").addEventListener("click", () => loadDataset("data/POI_small.csv", "POI_small.csv"));
+  document.getElementById("load-medium-btn").addEventListener("click", () => loadDataset("data/POI_medium.csv", "POI_medium.csv"));
+  document.getElementById("load-large-btn").addEventListener("click", () => loadDataset("data/POI_large.csv", "POI_large.csv"));
+
+  // algos
+  document.getElementById("algo-nn").addEventListener("click", () => {
+    if (currPois.length < 2) return;
+    const order = getBaseOrder();
+    drawRoute(order);
+    renderRoute(order, "Route (NN)");
+  });
+
+  document.getElementById("algo-2opt").addEventListener("click", () => {
+    if (currPois.length < 2) return;
+    const order = twoOpt(getBaseOrder().slice());
+    drawRoute(order);
+    renderRoute(order, "Route (NN + 2-opt)");
+  });
+
+  document.getElementById("algo-sa").addEventListener("click", () => {
+    if (currPois.length < 2) return;
+    const base = twoOpt(getBaseOrder().slice());
+    const order = saOrder(base, 2500);
+    drawRoute(order);
+    renderRoute(order, "Route (SA)");
+  });
+
+  document.getElementById("algo-ga").addEventListener("click", () => {
+    if (currPois.length < 2) return;
+    const order = gaLite(40);
+    drawRoute(order);
+    renderRoute(order, "Route (GA-lite)");
+  });
+
+  // clear
+  document.getElementById("clear-btn").addEventListener("click", () => {
+    clearRoute();
+    renderMsg("Cleared route.");
+  });
+
+  // search add
+  const qEl = document.getElementById("search-q");
+  document.getElementById("search-add-btn").addEventListener("click", async () => {
+    const q = (qEl.value || "").trim();
+    if (!q) return renderMsg("Type a place or address first.");
+
+    try {
+      renderMsg(`Searching: ${q} ...`);
+      const hit = await nominatimSearch(q);
+      if (!hit) return renderMsg("No results found. Try a more specific query.");
+
+      const name = hit.display_name.split(",").slice(0, 2).join(", ");
+      const lat = Number(hit.lat);
+      const lon = Number(hit.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return renderMsg("Bad search result. Try again.");
+
+      searchLayer.clearLayers();
+      L.marker([lat, lon]).addTo(searchLayer).bindPopup(`Added: ${safe(name)}`).openPopup();
+      map.setView([lat, lon], 15);
+
+      addPOI(name, lat, lon);
+      qEl.value = "";
+    } catch (e) {
+      renderMsg(`Search error: ${e.message}`);
+    }
+  });
+
+  qEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("search-add-btn").click();
+  });
+
+  // nearby cafes
+  document.getElementById("nearby-cafes-btn")?.addEventListener("click", async () => {
     if (!userLatLon) return renderMsg("Tap 'Use my location' first.");
 
     try {
       const radiusM = 1200;
       renderMsg("Searching nearby cafés...");
-
       nearbyLayer.clearLayers();
 
       const q = `
@@ -528,9 +573,9 @@ out center tags;
         });
       }
 
-      pts.slice(0, 60).forEach(addNearbyMarker);
-
       if (!pts.length) return renderMsg("No nearby cafés found in this radius.");
+
+      pts.slice(0, 60).forEach(addNearbyMarker);
 
       setOutHTML(`
         <div class="route-header">
@@ -545,56 +590,15 @@ out center tags;
 
       const bounds = L.latLngBounds(pts.slice(0, 60).map(p => [p.lat, p.lon]));
       map.fitBounds(bounds, { padding: [20, 20] });
-
     } catch (e) {
       renderMsg(`Nearby search error: ${e.message}`);
     }
   });
-
-  // Clear route
-  document.getElementById("clear-btn").addEventListener("click", () => {
-    clearRoute();
-    renderMsg("Cleared route.");
-  });
-
-  // Search + add (Nominatim)
-  const qEl = document.getElementById("search-q");
-  document.getElementById("search-add-btn").addEventListener("click", async () => {
-    const q = (qEl.value || "").trim();
-    if (!q) return renderMsg("Type a place or address first.");
-
-    try {
-      renderMsg(`Searching: ${q} ...`);
-      const hit = await nominatimSearch(q);
-      if (!hit) return renderMsg("No results found. Try a more specific query.");
-
-      const name = hit.display_name.split(",").slice(0, 2).join(", ");
-      const lat = Number(hit.lat);
-      const lon = Number(hit.lon);
-
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return renderMsg("Bad search result. Try again.");
-
-      searchLayer.clearLayers();
-      L.marker([lat, lon]).addTo(searchLayer).bindPopup(`Added: ${name}`).openPopup();
-      map.setView([lat, lon], 15);
-
-      addPOI(name, lat, lon);
-      qEl.value = "";
-    } catch (e) {
-      renderMsg(`Search error: ${e.message}`);
-    }
-  });
-
-  qEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") document.getElementById("search-add-btn").click();
-  });
-
-  // Keep your dataset load + algo button listeners below this
 }
-
 
 bindUI();
 renderMsg("Load POIs to begin.");
+
 
 
 
