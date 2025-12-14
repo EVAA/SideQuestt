@@ -417,5 +417,16 @@ header{
   gap: 10px;
   align-items: center;
 }
+/* pressed/selected state */
+button.is-on{
+  border: none !important;
+  background: var(--grad2) !important;
+  color: white !important;
+  box-shadow: var(--shadow) !important;
+}
+
+button.is-on:disabled{
+  opacity: 0.6;
+}
 
 

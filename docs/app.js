@@ -66,6 +66,21 @@ let routeLine = null;
 let startMode = "poi0"; // "poi0" | "user"
 let userLatLon = null;
 
+// ===== Place type (global) =====
+let placeType = "cafe"; // "cafe" | "bar" | "club"
+
+function overpassAmenityFilter() {
+  if (placeType === "bar") return `["amenity"~"bar|pub"]`;
+  if (placeType === "club") return `["amenity"="nightclub"]`;
+  return `["amenity"="cafe"]`;
+}
+
+function placeTypeLabel() {
+  if (placeType === "bar") return "Bars";
+  if (placeType === "club") return "Clubs";
+  return "Cafés";
+}
+
 // ===== UI helpers =====
 function setOutHTML(html) { out.innerHTML = html; }
 function safe(s) {
@@ -89,6 +104,15 @@ function updateStartToggle() {
   const btn = document.getElementById("start-toggle");
   if (!btn) return;
   btn.textContent = (startMode === "poi0") ? "Start: POI[0]" : "Start: My Location";
+}
+function setOn(id, on){
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.toggle("is-on", !!on);
+}
+
+function setAlgoActive(id){
+  ["algo-nn","algo-2opt","algo-sa","algo-ga"].forEach(x => setOn(x, x === id));
 }
 
 // ===== CSV =====
@@ -490,6 +514,23 @@ function bindUI() {
     setBasemap(on);
   });
 
+  // Place type segmented buttons
+function setType(t){
+  placeType = t;
+  setOn("type-cafe", t === "cafe");
+  setOn("type-bar", t === "bar");
+  setOn("type-club", t === "club");
+  renderMsg(`Mode: ${placeTypeLabel()}. Tap Nearby to search around you.`);
+}
+
+document.getElementById("type-cafe")?.addEventListener("click", () => setType("cafe"));
+document.getElementById("type-bar")?.addEventListener("click", () => setType("bar"));
+document.getElementById("type-club")?.addEventListener("click", () => setType("club"));
+
+// default mode on load
+setType("cafe");
+
+
   // location
   document.getElementById("loc-btn")?.addEventListener("click", () => {
     if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
@@ -529,6 +570,7 @@ function bindUI() {
   // algos
   document.getElementById("algo-nn")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
+    setAlgoActive("algo-nn");
     const order = getBaseOrder();
     drawRoute(order);
     renderRoute(order, "Route (NN)");
@@ -536,6 +578,7 @@ function bindUI() {
 
   document.getElementById("algo-2opt")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
+    setAlgoActive("algo-2opt");
     const order = twoOpt(getBaseOrder().slice());
     drawRoute(order);
     renderRoute(order, "Route (NN + 2-opt)");
@@ -543,6 +586,7 @@ function bindUI() {
 
   document.getElementById("algo-sa")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
+    setAlgoActive("algo-sa");
     const base = twoOpt(getBaseOrder().slice());
     const order = saOrder(base, 2500);
     drawRoute(order);
@@ -551,6 +595,7 @@ function bindUI() {
 
   document.getElementById("algo-ga")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
+    setAlgoActive("algo-ga");
     const order = gaLite(40);
     drawRoute(order);
     renderRoute(order, "Route (GA-lite)");
@@ -602,15 +647,18 @@ function bindUI() {
       renderMsg("Searching nearby cafés...");
       nearbyLayer.clearLayers();
 
-      const q = `
+      const f = overpassAmenityFilter();
+
+const q = `
 [out:json][timeout:25];
 (
-  node["amenity"="cafe"](around:${radiusM},${userLatLon.lat},${userLatLon.lon});
-  way["amenity"="cafe"](around:${radiusM},${userLatLon.lat},${userLatLon.lon});
-  relation["amenity"="cafe"](around:${radiusM},${userLatLon.lat},${userLatLon.lon});
+  node${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
+  way${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
+  relation${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
 );
 out center tags;
-      `;
+`;
+
 
       const js = await overpassQuery(q);
 
