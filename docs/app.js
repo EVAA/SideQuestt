@@ -125,12 +125,33 @@ function distFromStartTo(i) {
 }
 
 function routeLengthKm(order) {
+  if (!order.length) return 0;
+
+  // If starting from user, compute: user -> first -> ... -> last -> user
+  if (startMode === "user" && userLatLon) {
+    let tot = 0;
+
+    // user -> first
+    tot += haversineKm(userLatLon.lat, userLatLon.lon, currPois[order[0]].lat, currPois[order[0]].lon);
+
+    // between POIs
+    for (let i = 0; i < order.length - 1; i++) {
+      tot += distPois(order[i], order[i + 1]);
+    }
+
+    // last -> user
+    tot += haversineKm(userLatLon.lat, userLatLon.lon, currPois[order[order.length - 1]].lat, currPois[order[order.length - 1]].lon);
+
+    return tot;
+  }
+
+  // Default: closed tour over POIs (start = POI[0])
   let tot = 0;
-  for (let i = 0; i < order.length - 1; i++) tot += distPois(order[i], order[i+1]);
-  // close the loop back to start POI[0] regardless of start mode (simple for now)
+  for (let i = 0; i < order.length - 1; i++) tot += distPois(order[i], order[i + 1]);
   tot += distPois(order[order.length - 1], order[0]);
   return tot;
 }
+
 
 /* ===== Algorithms ===== */
 
@@ -262,37 +283,72 @@ function gaLite(bestOf = 40) {
 /* ===== Draw + output ===== */
 
 function drawRoute(order) {
-  const pts = order.map(i => [currPois[i].lat, currPois[i].lon]);
-  pts.push([currPois[order[0]].lat, currPois[order[0]].lon]);
+  if (!order.length) return;
+
+  let pts = [];
+
+  if (startMode === "user" && userLatLon) {
+    pts.push([userLatLon.lat, userLatLon.lon]); // start at user
+    pts.push(...order.map(i => [currPois[i].lat, currPois[i].lon]));
+    pts.push([userLatLon.lat, userLatLon.lon]); // end at user
+  } else {
+    pts = order.map(i => [currPois[i].lat, currPois[i].lon]);
+    pts.push([currPois[order[0]].lat, currPois[order[0]].lon]); // close loop
+  }
 
   if (routeLine) map.removeLayer(routeLine);
-
-  routeLine = L.polyline(pts, {
-    weight: 7,
-    opacity: 0.95,
-    lineJoin: "round"
-  }).addTo(map);
+  routeLine = L.polyline(pts, { weight: 7, opacity: 0.95, lineJoin: "round" }).addTo(map);
 }
+
 
 
 function renderRoute(order, label) {
   const km = routeLengthKm(order);
+  const startLabel = (startMode === "user" && userLatLon) ? "My Location" : "POI[0]";
 
-  const items = order.map((idx, k) => {
+  const items = [];
+
+  // Add "You" as first bubble if starting from user
+  if (startMode === "user" && userLatLon) {
+    items.push(`
+      <li class="bubble">
+        <div class="num">1</div>
+        <div class="name">You</div>
+        <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
+      </li>
+      <div class="arrow"><span>↓</span></div>
+    `);
+  }
+
+  // Then list the POIs
+  order.forEach((idx, k) => {
     const p = currPois[idx];
     const sub = `(${p.lat.toFixed(4)}, ${p.lon.toFixed(4)})`;
+    const num = (startMode === "user" && userLatLon) ? (k + 2) : (k + 1);
 
-    const bubble = `
+    items.push(`
       <li class="bubble">
-        <div class="num">${k + 1}</div>
+        <div class="num">${num}</div>
         <div class="name">${safe(p.name)}</div>
         <div class="hint">${sub}</div>
       </li>
-    `;
+      ${k < order.length - 1 ? `<div class="arrow"><span>↓</span></div>` : ``}
+    `);
+  });
 
-    const arrow = (k < order.length - 1) ? `<div class="arrow"><span>↓</span></div>` : "";
-    return bubble + arrow;
-  }).join("");
+  setOutHTML(`
+    <div class="route-header">
+      <div class="title">${safe(label)}</div>
+      <div class="meta">
+        <div class="chip">Start: ${safe(startLabel)}</div>
+        <div class="chip">Distance: ${km.toFixed(2)} km</div>
+        <div class="chip">Stops: ${(startMode === "user" && userLatLon) ? (order.length + 1) : order.length}</div>
+      </div>
+    </div>
+    <ol class="route-bubbles">${items.join("")}</ol>
+  `);
+}
+
 
   const startLabel = (startMode === "user" && userLatLon) ? "My Location" : "POI[0]";
 
@@ -307,7 +363,7 @@ function renderRoute(order, label) {
     </div>
     <ol class="route-bubbles">${items}</ol>
   `);
-}
+
 
 /* ===== Search add ===== */
 
