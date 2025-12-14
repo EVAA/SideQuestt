@@ -1,3 +1,22 @@
+console.log("SideQuest app.js loaded ✅");
+
+window.addEventListener("error", (e) => {
+  const out = document.getElementById("out");
+  const msg = e?.message || "Unknown JS error";
+  console.error("JS error:", e);
+  if (out) out.innerHTML = `<div class="out-title">JS Error: ${msg}</div>`;
+});
+
+window.addEventListener("unhandledrejection", (e) => {
+  const out = document.getElementById("out");
+  const msg = e?.reason?.message || String(e?.reason || "Promise rejection");
+  console.error("Promise rejection:", e);
+  if (out) out.innerHTML = `<div class="out-title">Promise Error: ${msg}</div>`;
+});
+
+
+
+
 const out = document.getElementById("out");
 
 // ===== Map (CARTO Voyager, no key) =====
