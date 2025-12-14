@@ -289,5 +289,109 @@ button.ghost{
   box-shadow: var(--shadow2) !important;
 }
 
+/* ===== Toggle row ===== */
+.toggles{
+  display: grid;
+  gap: 10px;
+}
+
+/* segmented control */
+.seg{
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.seg-btn{
+  border: 1px solid var(--border);
+  background: var(--card);
+  border-radius: 14px;
+  padding: 10px 12px;
+  box-shadow: var(--shadow2);
+  font-weight: 650;
+}
+
+.seg-btn.active{
+  border: none;
+  background: var(--grad2);
+  color: white;
+}
+
+/* night mode switch */
+.switch{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  user-select: none;
+}
+
+.switch input{ display:none; }
+
+.slider{
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(17,24,39,0.15);
+  position: relative;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow2);
+}
+
+.slider::after{
+  content:"";
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  top: 50%;
+  left: 3px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: white;
+  transition: left 0.16s ease;
+}
+
+.switch input:checked + .slider::after{
+  left: 21px;
+}
+
+.switch-label{
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+/* ===== Dark theme (Night Mode) ===== */
+body.dark{
+  --bg: #0b1020;
+  --card: rgba(255,255,255,0.06);
+  --text: #e5e7eb;
+  --muted: rgba(229,231,235,0.70);
+  --border: rgba(255,255,255,0.10);
+  --shadow: 0 14px 30px rgba(0,0,0,0.35);
+  --shadow2: 0 8px 16px rgba(0,0,0,0.35);
+
+  /* darker gradients */
+  --grad: linear-gradient(90deg, #7c3aed 0%, #0ea5e9 55%, #22c55e 100%);
+  --grad2: linear-gradient(135deg, #7c3aed 0%, #0ea5e9 60%, #22c55e 100%);
+}
+
+body.dark header{
+  background: rgba(11,16,32,0.72);
+}
+
+body.dark .panel{
+  background: rgba(255,255,255,0.06);
+}
+
+body.dark .bubble{
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+body.dark .leaflet-control-attribution{
+  background: rgba(0,0,0,0.35) !important;
+  color: rgba(255,255,255,0.75) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+}
 
 

@@ -19,18 +19,42 @@ window.addEventListener("unhandledrejection", (e) => {
 
 const out = document.getElementById("out");
 
-// ===== Map (CARTO Voyager, no key) =====
+// ===== Map (switchable basemap) =====
 const map = L.map("map").setView([43.6532, -79.3832], 13);
 
-L.tileLayer(
-  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-  {
-    maxZoom: 20,
-    attribution:
-      '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-  }
-).addTo(map);
+let tileLayer = null;
 
+function setBasemap(isDark) {
+  if (tileLayer) map.removeLayer(tileLayer);
+
+  if (isDark) {
+    // Dark basemap (CARTO Dark Matter)
+    tileLayer = L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      {
+        maxZoom: 20,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      }
+    );
+  } else {
+    // Light basemap (CARTO Voyager)
+    tileLayer = L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      {
+        maxZoom: 20,
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+      }
+    );
+  }
+
+  tileLayer.addTo(map);
+}
+
+setBasemap(false);
+
+// ===== Layers / state =====
 let userMarker = null;
 let poiLayer = L.layerGroup().addTo(map);
 let nearbyLayer = L.layerGroup().addTo(map);
@@ -449,8 +473,8 @@ function bindUI() {
   enableAlgos(false);
   updateStartToggle();
 
-  // start toggle
-  document.getElementById("start-toggle").addEventListener("click", () => {
+  // start toggle (POI[0] vs My Location)
+  document.getElementById("start-toggle")?.addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
     updateStartToggle();
     renderMsg(startMode === "user"
@@ -459,8 +483,15 @@ function bindUI() {
     );
   });
 
+  // night mode toggle (UI + map)
+  document.getElementById("night-toggle")?.addEventListener("change", (e) => {
+    const on = !!e.target.checked;
+    document.body.classList.toggle("dark", on);
+    setBasemap(on);
+  });
+
   // location
-  document.getElementById("loc-btn").addEventListener("click", () => {
+  document.getElementById("loc-btn")?.addEventListener("click", () => {
     if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
 
     navigator.geolocation.getCurrentPosition(
@@ -485,26 +516,32 @@ function bindUI() {
   });
 
   // load buttons
-  document.getElementById("load-small-btn").addEventListener("click", () => loadDataset("data/POI_small.csv", "POI_small.csv"));
-  document.getElementById("load-medium-btn").addEventListener("click", () => loadDataset("data/POI_medium.csv", "POI_medium.csv"));
-  document.getElementById("load-large-btn").addEventListener("click", () => loadDataset("data/POI_large.csv", "POI_large.csv"));
+  document.getElementById("load-small-btn")?.addEventListener("click", () =>
+    loadDataset("data/POI_small.csv", "POI_small.csv")
+  );
+  document.getElementById("load-medium-btn")?.addEventListener("click", () =>
+    loadDataset("data/POI_medium.csv", "POI_medium.csv")
+  );
+  document.getElementById("load-large-btn")?.addEventListener("click", () =>
+    loadDataset("data/POI_large.csv", "POI_large.csv")
+  );
 
   // algos
-  document.getElementById("algo-nn").addEventListener("click", () => {
+  document.getElementById("algo-nn")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
     const order = getBaseOrder();
     drawRoute(order);
     renderRoute(order, "Route (NN)");
   });
 
-  document.getElementById("algo-2opt").addEventListener("click", () => {
+  document.getElementById("algo-2opt")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
     const order = twoOpt(getBaseOrder().slice());
     drawRoute(order);
     renderRoute(order, "Route (NN + 2-opt)");
   });
 
-  document.getElementById("algo-sa").addEventListener("click", () => {
+  document.getElementById("algo-sa")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
     const base = twoOpt(getBaseOrder().slice());
     const order = saOrder(base, 2500);
@@ -512,7 +549,7 @@ function bindUI() {
     renderRoute(order, "Route (SA)");
   });
 
-  document.getElementById("algo-ga").addEventListener("click", () => {
+  document.getElementById("algo-ga")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
     const order = gaLite(40);
     drawRoute(order);
@@ -520,15 +557,15 @@ function bindUI() {
   });
 
   // clear
-  document.getElementById("clear-btn").addEventListener("click", () => {
+  document.getElementById("clear-btn")?.addEventListener("click", () => {
     clearRoute();
     renderMsg("Cleared route.");
   });
 
   // search add
   const qEl = document.getElementById("search-q");
-  document.getElementById("search-add-btn").addEventListener("click", async () => {
-    const q = (qEl.value || "").trim();
+  document.getElementById("search-add-btn")?.addEventListener("click", async () => {
+    const q = (qEl?.value || "").trim();
     if (!q) return renderMsg("Type a place or address first.");
 
     try {
@@ -546,17 +583,17 @@ function bindUI() {
       map.setView([lat, lon], 15);
 
       addPOI(name, lat, lon);
-      qEl.value = "";
+      if (qEl) qEl.value = "";
     } catch (e) {
       renderMsg(`Search error: ${e.message}`);
     }
   });
 
-  qEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") document.getElementById("search-add-btn").click();
+  qEl?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("search-add-btn")?.click();
   });
 
-  // nearby cafes
+  // nearby cafes (you can later swap to bars/clubs by changing the amenity filter)
   document.getElementById("nearby-cafes-btn")?.addEventListener("click", async () => {
     if (!userLatLon) return renderMsg("Tap 'Use my location' first.");
 
