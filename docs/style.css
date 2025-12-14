@@ -78,6 +78,33 @@ h1{
   gap: 10px;
 }
 
+
+.nearby-wrap{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.radius{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.radius input[type="range"]{
+  width: 160px;
+}
+
+.radius-val{
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 750;
+  min-width: 56px;
+  text-align: right;
+}
+
+
 .search{
   position: relative;
   display: grid;

@@ -35,6 +35,8 @@ setBasemap(false);
 let loopMode = true;
 let lastOrder = null;
 let lastLabel = "";
+let nearbyRadiusM = 1400;
+
 
 // ===== Layers / state =====
 let userMarker = null;
@@ -454,30 +456,22 @@ async function overpassQuery(query) {
 }
 
 function addRecoMarker(p) {
-  const name = p.name || "Place";
-  const lat = p.lat, lon = p.lon;
+  const isNightUI = document.body.classList.contains("dark");
+  const isNightPlaces = (placeType === "night");
+
+   // Different colors only when the UI is in night mode AND you're showing bars/clubs
+  const style = (isNightUI && isNightPlaces)
+  ? { color: "#ff4d9d", fillColor: "#ff1f7a" }   // bars/clubs in night mode (hot pink)
+  : { color: "#7c3aed", fillColor: "#0ea5e9" };  // default (purple/blue)
 
   const m = L.circleMarker([lat, lon], {
-    radius: 7,
-    weight: 2,
-    opacity: 0.95,
-    fillOpacity: 0.95
-  }).addTo(recoLayer);
+  radius: 7,
+  weight: 2,
+  opacity: 0.95,
+  fillOpacity: 0.95,
+  ...style
+}).addTo(recoLayer);
 
-  m.bindPopup(`
-    <b>${safe(name)}</b><br/>
-    <button id="add-${p._id}" type="button">Add stop</button>
-  `);
-
-  m.on("popupopen", () => {
-    const btn = document.getElementById(`add-${p._id}`);
-    if (!btn) return;
-    btn.onclick = () => {
-      addPOI(name, lat, lon);
-      showToast("Added to route");
-      map.closePopup();
-    };
-  });
 }
 
 function scoreReco(el) {
@@ -491,7 +485,7 @@ async function recommendNearby() {
   const anchor = getAnchorLatLonForRecommendations();
   if (!anchor) return renderMsg("Tap “Use my location” or add a first stop (POI[0]) first.");
 
-  const radiusM = 1400;
+  const radiusM = nearbyRadiusM || 1400;
   const f = overpassAmenityFilter();
 
   renderMsg(`Finding nearby ${placeTypeLabel()}…`);
@@ -570,6 +564,26 @@ function bindUI() {
   }
 
   updateLoopToggle();
+
+  // ---- Radius slider ----
+const rEl = document.getElementById("radius-slider");
+const rValEl = document.getElementById("radius-val");
+
+function setRadiusLabel(m) {
+  if (!rValEl) return;
+  rValEl.textContent = (m / 1000).toFixed(1) + " km";
+}
+
+if (rEl) {
+  nearbyRadiusM = Number(rEl.value) || 1400;
+  setRadiusLabel(nearbyRadiusM);
+
+  rEl.addEventListener("input", (e) => {
+    nearbyRadiusM = Number(e.target.value) || 1400;
+    setRadiusLabel(nearbyRadiusM);
+  });
+}
+
 
   document.getElementById("loop-toggle")?.addEventListener("click", () => {
   loopMode = !loopMode;

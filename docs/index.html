@@ -25,7 +25,15 @@
 
       <div class="controls">
         <button id="loc-btn" type="button">Use my location</button>
-        <button id="nearby-btn" type="button">Recommend nearby</button>
+        <div class="nearby-wrap">
+           <button id="nearby-btn" type="button">Recommend nearby</button>
+           <label class="radius">
+              <span class="switch-label">Radius</span>
+              <input id="radius-slider" type="range" min="300" max="5000" step="100" value="1400" />
+              <span id="radius-val" class="radius-val">1.4 km</span>
+            </label>
+        </div>
+
 
         <button class="ghost" id="start-toggle" type="button" title="Toggle start mode">
           Start: POI[0]
