@@ -1,5 +1,13 @@
 const out = document.getElementById("out");
 
+// Toronto bounding box (SW, NE)
+const TORONTO_BOUNDS = {
+  minLat: 43.5810,
+  maxLat: 43.8555,
+  minLon: -79.6393,
+  maxLon: -79.1169
+};
+
 // ===== Map (switchable basemap) =====
 const map = L.map("map").setView([43.6532, -79.3832], 13);
 
@@ -74,6 +82,26 @@ function overpassAmenityFilter() {
 function placeTypeLabel() {
   return (placeType === "night") ? "Bars + Clubs" : "Cafés";
 }
+
+async function nominatimAutocomplete(q) {
+  if (!userLatLon) return [];
+
+  const url =
+    `https://nominatim.openstreetmap.org/search?` +
+    `format=json&limit=5&addressdetails=1` +
+    `&viewbox=${TORONTO_BOUNDS.minLon},${TORONTO_BOUNDS.maxLat},${TORONTO_BOUNDS.maxLon},${TORONTO_BOUNDS.minLat}` +
+    `&bounded=1` +
+    `&lat=${userLatLon.lat}&lon=${userLatLon.lon}` +
+    `&q=${encodeURIComponent(q)}`;
+
+  const res = await fetch(url, {
+    headers: { "Accept": "application/json" }
+  });
+
+  if (!res.ok) return [];
+  return await res.json();
+}
+
 
 // ===== Distances =====
 function haversineKm(lat1, lon1, lat2, lon2) {
@@ -407,12 +435,15 @@ function scoreReco(el) {
 }
 
 async function recommendNearby() {
-  if (!userLatLon) return renderMsg("Tap 'Use my location' first.");
+  if (!userLatLon) {
+    renderMsg("Tap “Use my location” first.");
+    return;
+  }
 
   const radiusM = 1400;
   const f = overpassAmenityFilter();
 
-  renderMsg(`Finding nearby ${placeTypeLabel()}...`);
+  renderMsg(`Finding nearby ${placeTypeLabel()}…`);
   recoLayer.clearLayers();
 
   const q = `
@@ -425,25 +456,51 @@ async function recommendNearby() {
 out center tags;
 `;
 
-  const js = await overpassQuery(q);
+  try {
+    const js = await overpassQuery(q);
+    console.log("Overpass result:", js);
 
-  const elems = (js.elements || []).slice();
-  elems.sort((a, b) => scoreReco(b) - scoreReco(a));
+    if (!js.elements || js.elements.length === 0) {
+      renderMsg(`No nearby ${placeTypeLabel()} found.`);
+      return;
+    }
 
-  const pts = [];
-  for (let i = 0; i < elems.length; i++) {
-    const el = elems[i];
-    const lat = el.lat ?? el.center?.lat;
-    const lon = el.lon ?? el.center?.lon;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+    const pts = [];
+    js.elements.forEach((el, i) => {
+      const lat = el.lat ?? el.center?.lat;
+      const lon = el.lon ?? el.center?.lon;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
-    pts.push({
-      _id: `r${i}`,
-      lat,
-      lon,
-      name: el.tags?.name || "Place"
+      pts.push({
+        _id: `r${i}`,
+        lat,
+        lon,
+        name: el.tags?.name || placeTypeLabel().slice(0, -1)
+      });
     });
+
+    pts.slice(0, 40).forEach(addRecoMarker);
+
+    setOutHTML(`
+      <div class="route-header">
+        <div class="title">Recommended nearby • ${safe(placeTypeLabel())}</div>
+        <div class="meta">
+          <div class="chip">Shown: ${Math.min(40, pts.length)}</div>
+          <div class="chip">Radius: ${(radiusM/1000).toFixed(1)} km</div>
+          <div class="chip">Tap marker → Add</div>
+        </div>
+      </div>
+    `);
+
+    const bounds = L.latLngBounds(pts.slice(0, 40).map(p => [p.lat, p.lon]));
+    map.fitBounds(bounds, { padding: [20, 20] });
+
+  } catch (e) {
+    console.error(e);
+    renderMsg("Nearby search failed. Try again in a moment.");
   }
+}
+
 
   const top = pts.slice(0, 40);
   if (!top.length) return renderMsg(`No nearby ${placeTypeLabel()} found.`);
@@ -464,7 +521,7 @@ out center tags;
 
   const bounds = L.latLngBounds(top.map(p => [p.lat, p.lon]));
   map.fitBounds(bounds, { padding: [20, 20] });
-}
+
 
 // ===== Bind UI =====
 function bindUI() {
@@ -537,30 +594,69 @@ function bindUI() {
   });
 
   // search + add
-  const qEl = document.getElementById("search-q");
-  document.getElementById("search-add-btn")?.addEventListener("click", async () => {
-    const q = (qEl?.value || "").trim();
-    if (!q) return renderMsg("Type a place or address first.");
+  // search + autocomplete (Toronto-bounded + proximity)
+const qEl = document.getElementById("search-q");
+const resultsEl = document.getElementById("search-results");
 
-    try {
-      renderMsg(`Searching: ${q} ...`);
-      const hit = await nominatimSearch(q);
-      if (!hit) return renderMsg("No results found. Try a more specific query.");
+qEl?.addEventListener("input", async () => {
+  const q = (qEl.value || "").trim();
+  if (!resultsEl) return;
 
-      const name = hit.display_name.split(",").slice(0, 2).join(", ");
+  resultsEl.innerHTML = "";
+  if (q.length < 3) return;
+  if (!userLatLon) return; // requires location for proximity sorting
+
+  const hits = await nominatimAutocomplete(q);
+
+  hits.slice(0, 3).forEach(hit => {
+    const div = document.createElement("div");
+    div.className = "search-item";
+    div.textContent = hit.display_name.split(",").slice(0, 3).join(", ");
+
+    div.onclick = () => {
       const lat = Number(hit.lat);
       const lon = Number(hit.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return renderMsg("Bad search result. Try again.");
-
-      searchLayer.clearLayers();
-      L.marker([lat, lon]).addTo(searchLayer).bindPopup(`Added: ${safe(name)}`).openPopup();
+      const name = hit.display_name.split(",")[0];
 
       addPOI(name, lat, lon);
-      if (qEl) qEl.value = "";
-    } catch (e) {
-      renderMsg(`Search error: ${e.message}`);
-    }
+      map.setView([lat, lon], 15);
+
+      qEl.value = "";
+      resultsEl.innerHTML = "";
+    };
+
+    resultsEl.appendChild(div);
   });
+});
+
+// “Add” button uses the first suggestion (or falls back to 1-shot search if you keep it)
+document.getElementById("search-add-btn")?.addEventListener("click", async () => {
+  const q = (qEl?.value || "").trim();
+  if (!q) return renderMsg("Type a place first.");
+
+  if (!userLatLon) return renderMsg("Tap “Use my location” first (needed for closest results).");
+
+  const hits = await nominatimAutocomplete(q);
+  if (!hits.length) return renderMsg("No results found. Try a more specific query.");
+
+  const hit = hits[0];
+  const lat = Number(hit.lat);
+  const lon = Number(hit.lon);
+  const name = hit.display_name.split(",")[0];
+
+  addPOI(name, lat, lon);
+  map.setView([lat, lon], 15);
+
+  if (qEl) qEl.value = "";
+  if (resultsEl) resultsEl.innerHTML = "";
+});
+
+// hide dropdown on Enter
+qEl?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("search-add-btn")?.click();
+});
+
+
 
   qEl?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") document.getElementById("search-add-btn")?.click();
