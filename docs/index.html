@@ -52,14 +52,21 @@
           <button id="type-cafe" class="seg-btn" type="button">Cafés</button>
           <button id="type-night" class="seg-btn" type="button">Bars + Clubs</button>
         </div>
-
-        <label class="switch">
-          <input id="night-toggle" type="checkbox" />
-          <span class="slider"></span>
-          <span class="switch-label">Night mode</span>
-        </label>
+        <div class="toggle-row">
+           <label class="switch">
+              <input id="night-toggle" type="checkbox" />
+              <span class="slider"></span>
+              <span class="switch-label">Night mode</span>
+           </label>
+           <label class="grad-picker">
+              <span class="switch-label">Gradient</span>
+              <select id="grad-theme">
+                  <option value="g1" selected>Purple • Blue • Green</option>
+                  <option value="g2">Pink • Orange • Yellow</option>
+              <option value="g3">Red • Dark Pink • Dark Purple</option>
+              </select>
+            </label>
       </div>
-    </div>
   </header>
 
   <div id="map"></div>

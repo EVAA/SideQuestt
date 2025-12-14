@@ -128,6 +128,32 @@ button.is-on{
   gap: 10px;
 }
 
+.toggle-row{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.grad-picker{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+select{
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 14px;
+  box-shadow: var(--shadow2);
+  font-weight: 650;
+  outline: none;
+}
+
+
 .seg{
   display: grid;
   gap: 8px;
@@ -355,3 +381,20 @@ body.dark .leaflet-control-attribution{
   color: rgba(255,255,255,0.75) !important;
   border: 1px solid rgba(255,255,255,0.10) !important;
 }
+
+/* ===== Gradient themes (switches --grad / --grad2) ===== */
+body.g1{
+  --grad: linear-gradient(90deg, #7c3aed 0%, #0ea5e9 55%, #22c55e 100%);
+  --grad2: linear-gradient(135deg, #7c3aed 0%, #0ea5e9 60%, #22c55e 100%);
+}
+
+body.g2{
+  --grad: linear-gradient(90deg, #fb7185 0%, #fb923c 50%, #facc15 100%);
+  --grad2: linear-gradient(135deg, #fb7185 0%, #fb923c 55%, #facc15 100%);
+}
+
+body.g3{
+  --grad: linear-gradient(90deg, #ef4444 0%, #db2777 55%, #5b21b6 100%);
+  --grad2: linear-gradient(135deg, #ef4444 0%, #db2777 55%, #5b21b6 100%);
+}
+

@@ -601,6 +601,28 @@ function bindUI() {
     setBasemap(on);
   });
 
+  // ---- Gradient theme picker ----
+function applyGradTheme(val) {
+  document.body.classList.remove("g1", "g2", "g3");
+  document.body.classList.add(val);
+  try { localStorage.setItem("gradTheme", val); } catch {}
+}
+
+const gradSel = document.getElementById("grad-theme");
+const savedGrad = (() => { try { return localStorage.getItem("gradTheme"); } catch { return null; } })();
+
+if (savedGrad && ["g1","g2","g3"].includes(savedGrad)) {
+  if (gradSel) gradSel.value = savedGrad;
+  applyGradTheme(savedGrad);
+} else {
+  applyGradTheme("g1"); // default
+}
+
+gradSel?.addEventListener("change", (e) => {
+  applyGradTheme(e.target.value);
+});
+
+
   function setType(t) {
     placeType = t;
     setOn("type-cafe", t === "cafe");
