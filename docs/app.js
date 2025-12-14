@@ -1,63 +1,31 @@
-console.log("SideQuest app.js loaded ✅");
-
-window.addEventListener("error", (e) => {
-  const out = document.getElementById("out");
-  const msg = e?.message || "Unknown JS error";
-  console.error("JS error:", e);
-  if (out) out.innerHTML = `<div class="out-title">JS Error: ${msg}</div>`;
-});
-
-window.addEventListener("unhandledrejection", (e) => {
-  const out = document.getElementById("out");
-  const msg = e?.reason?.message || String(e?.reason || "Promise rejection");
-  console.error("Promise rejection:", e);
-  if (out) out.innerHTML = `<div class="out-title">Promise Error: ${msg}</div>`;
-});
-
-
-
-
 const out = document.getElementById("out");
 
 // ===== Map (switchable basemap) =====
 const map = L.map("map").setView([43.6532, -79.3832], 13);
 
 let tileLayer = null;
-
 function setBasemap(isDark) {
   if (tileLayer) map.removeLayer(tileLayer);
 
-  if (isDark) {
-    // Dark basemap (CARTO Dark Matter)
-    tileLayer = L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-      {
-        maxZoom: 20,
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-      }
-    );
-  } else {
-    // Light basemap (CARTO Voyager)
-    tileLayer = L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-      {
-        maxZoom: 20,
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-      }
-    );
-  }
+  tileLayer = L.tileLayer(
+    isDark
+      ? "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+      : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+    {
+      maxZoom: 20,
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+    }
+  );
 
   tileLayer.addTo(map);
 }
-
 setBasemap(false);
 
 // ===== Layers / state =====
 let userMarker = null;
 let poiLayer = L.layerGroup().addTo(map);
-let nearbyLayer = L.layerGroup().addTo(map);
+let recoLayer = L.layerGroup().addTo(map);
 let searchLayer = L.layerGroup().addTo(map);
 
 let currPois = [];
@@ -66,20 +34,7 @@ let routeLine = null;
 let startMode = "poi0"; // "poi0" | "user"
 let userLatLon = null;
 
-// ===== Place type (global) =====
-let placeType = "cafe"; // "cafe" | "bar" | "club"
-
-function overpassAmenityFilter() {
-  if (placeType === "night") return `["amenity"~"bar|pub|nightclub"]`;
-  return `["amenity"="cafe"]`;
-}
-
-
-function placeTypeLabel() {
-  if (placeType === "night") return "Bars + Clubs";
-  return "Cafés";
-}
-
+let placeType = "cafe"; // "cafe" | "night"
 
 // ===== UI helpers =====
 function setOutHTML(html) { out.innerHTML = html; }
@@ -92,96 +47,32 @@ function safe(s) {
 }
 function renderMsg(msg) { setOutHTML(`<div class="out-title">${safe(msg)}</div>`); }
 
-function setDisabled(id, v) {
-  const el = document.getElementById(id);
-  if (el) el.disabled = v;
-}
-function enableAlgos(ok) {
-  ["algo-nn", "algo-2opt", "algo-sa", "algo-ga"].forEach(id => setDisabled(id, !ok));
-}
-
-function updateStartToggle() {
-  const btn = document.getElementById("start-toggle");
-  if (!btn) return;
-  btn.textContent = (startMode === "poi0") ? "Start: POI[0]" : "Start: My Location";
-}
 function setOn(id, on){
   const el = document.getElementById(id);
   if (!el) return;
   el.classList.toggle("is-on", !!on);
 }
-
 function setAlgoActive(id){
   ["algo-nn","algo-2opt","algo-sa","algo-ga"].forEach(x => setOn(x, x === id));
 }
-
-// ===== CSV =====
-function parseCsv(text) {
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) return [];
-
-  const hdr = lines[0].split(",").map(x => x.trim().toLowerCase());
-  const iName = hdr.indexOf("name");
-  const iLat = hdr.indexOf("lat") >= 0 ? hdr.indexOf("lat") : hdr.indexOf("latitude");
-  const iLon =
-    hdr.indexOf("lon") >= 0 ? hdr.indexOf("lon")
-    : hdr.indexOf("lng") >= 0 ? hdr.indexOf("lng")
-    : hdr.indexOf("longitude");
-
-  if (iName < 0 || iLat < 0 || iLon < 0) {
-    throw new Error(`CSV header must include name, lat/latitude, lon/longitude (got: ${lines[0]})`);
-  }
-
-  const pois = [];
-  for (let k = 1; k < lines.length; k++) {
-    const row = lines[k].split(",");
-    if (row.length < Math.max(iName, iLat, iLon) + 1) continue;
-
-    const name = row[iName].trim();
-    const lat = Number(row[iLat]);
-    const lon = Number(row[iLon]);
-
-    if (!name || !Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-    pois.push({ name, lat, lon });
-  }
-  return pois;
+function updateStartToggle() {
+  const btn = document.getElementById("start-toggle");
+  if (!btn) return;
+  btn.textContent = (startMode === "poi0") ? "Start: POI[0]" : "Start: My Location";
 }
-
-async function loadText(path) {
-  const res = await fetch(path, { cache: "no-store" });
-  if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
-  return await res.text();
-}
-
-// ===== Plotting =====
-function clearRoute() {
-  if (routeLine) map.removeLayer(routeLine);
-  routeLine = null;
-}
-
-function plotPois(pois) {
-  poiLayer.clearLayers();
-  clearRoute();
-
-  let minLat = 90, maxLat = -90, minLon = 180, maxLon = -180;
-
-  pois.forEach(p => {
-    L.circleMarker([p.lat, p.lon], {
-      radius: 7,
-      weight: 2,
-      opacity: 0.9,
-      fillOpacity: 0.9
-    }).addTo(poiLayer).bindPopup(p.name);
-
-    minLat = Math.min(minLat, p.lat);
-    maxLat = Math.max(maxLat, p.lat);
-    minLon = Math.min(minLon, p.lon);
-    maxLon = Math.max(maxLon, p.lon);
+function enableAlgos(ok) {
+  ["algo-nn","algo-2opt","algo-sa","algo-ga"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !ok;
   });
+}
 
-  if (pois.length) {
-    map.fitBounds([[minLat, minLon], [maxLat, maxLon]], { padding: [20, 20] });
-  }
+function overpassAmenityFilter() {
+  if (placeType === "night") return `["amenity"~"bar|pub|nightclub"]`;
+  return `["amenity"="cafe"]`;
+}
+function placeTypeLabel() {
+  return (placeType === "night") ? "Bars + Clubs" : "Cafés";
 }
 
 // ===== Distances =====
@@ -190,21 +81,18 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   const toRad = d => d * Math.PI / 180.0;
   const p1 = toRad(lat1), p2 = toRad(lat2);
   const dp = toRad(lat2 - lat1), dl = toRad(lon2 - lon1);
-  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
-
 function distPois(i, j) {
   const a = currPois[i], b = currPois[j];
   return haversineKm(a.lat, a.lon, b.lat, b.lon);
 }
-
 function distFromUserToIdx(i) {
   if (!userLatLon) return Infinity;
   return haversineKm(userLatLon.lat, userLatLon.lon, currPois[i].lat, currPois[i].lon);
 }
 
-// Route length: if start=user => user -> first -> ... -> last -> user
 function routeLengthKm(order) {
   if (!order.length) return 0;
 
@@ -216,7 +104,6 @@ function routeLengthKm(order) {
     return tot;
   }
 
-  // closed tour on POIs
   let tot = 0;
   for (let i = 0; i < order.length - 1; i++) tot += distPois(order[i], order[i + 1]);
   tot += distPois(order[order.length - 1], order[0]);
@@ -232,7 +119,6 @@ function nnOrder(startIdx = 0) {
   while (rem.size) {
     const last = order[order.length - 1];
     let best = null, bestD = Infinity;
-
     for (const j of rem) {
       const d = distPois(last, j);
       if (d < bestD) { bestD = d; best = j; }
@@ -284,7 +170,7 @@ function twoOpt(order) {
         const c = order[k], d = order[k + 1];
 
         const before = distPois(a, b) + distPois(c, d);
-        const after = distPois(a, c) + distPois(b, d);
+        const after  = distPois(a, c) + distPois(b, d);
 
         if (after + 1e-12 < before) {
           const seg = order.slice(i, k + 1).reverse();
@@ -327,7 +213,6 @@ function saOrder(baseOrder, iters = 2500) {
     }
     T *= cool;
   }
-
   return best;
 }
 
@@ -356,11 +241,31 @@ function gaLite(bestOf = 40) {
 }
 
 // ===== Draw + Output =====
+function clearRoute() {
+  if (routeLine) map.removeLayer(routeLine);
+  routeLine = null;
+}
+
+function plotPois() {
+  poiLayer.clearLayers();
+  clearRoute();
+
+  currPois.forEach((p) => {
+    L.circleMarker([p.lat, p.lon], {
+      radius: 7,
+      weight: 2,
+      opacity: 0.9,
+      fillOpacity: 0.9
+    }).addTo(poiLayer).bindPopup(safe(p.name));
+  });
+
+  enableAlgos(currPois.length >= 2);
+}
+
 function drawRoute(order) {
   if (!order.length) return;
 
   let pts = [];
-
   if (startMode === "user" && userLatLon) {
     pts.push([userLatLon.lat, userLatLon.lon]);
     pts.push(...order.map(i => [currPois[i].lat, currPois[i].lon]));
@@ -384,49 +289,64 @@ function renderRoute(order, label) {
     items.push(`
       <li class="bubble">
         <div class="num">1</div>
-        <div class="name">You</div>
-        <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
+        <div>
+          <div class="name">You</div>
+          <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
+        </div>
+        <div class="row-actions"></div>
       </li>
-      <div class="arrow"><span>↓</span></div>
     `);
   }
 
   order.forEach((idx, k) => {
     const p = currPois[idx];
-    const sub = `(${p.lat.toFixed(4)}, ${p.lon.toFixed(4)})`;
     const num = (startMode === "user" && userLatLon) ? (k + 2) : (k + 1);
 
     items.push(`
       <li class="bubble">
         <div class="num">${num}</div>
-        <div class="name">${safe(p.name)}</div>
-        <div class="hint">${sub}</div>
+        <div>
+          <div class="name">${safe(p.name)}</div>
+          <div class="hint">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>
+        </div>
+        <div class="row-actions">
+          <button class="pill" data-del="${idx}" type="button">Remove</button>
+        </div>
       </li>
-      ${k < order.length - 1 ? `<div class="arrow"><span>↓</span></div>` : ``}
     `);
   });
-
-  const stopsShown = (startMode === "user" && userLatLon) ? (order.length + 1) : order.length;
 
   setOutHTML(`
     <div class="route-header">
       <div class="title">${safe(label)}</div>
       <div class="meta">
+        <div class="chip">Mode: ${safe(placeTypeLabel())}</div>
         <div class="chip">Start: ${safe(startLabel)}</div>
         <div class="chip">Distance: ${km.toFixed(2)} km</div>
-        <div class="chip">Stops: ${stopsShown}</div>
+        <div class="chip">Stops: ${(startMode === "user" && userLatLon) ? (order.length + 1) : order.length}</div>
       </div>
     </div>
     <ol class="route-bubbles">${items.join("")}</ol>
   `);
+
+  // Remove handlers (map index -> actual POI idx)
+  document.querySelectorAll("[data-del]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.getAttribute("data-del"));
+      if (!Number.isFinite(idx)) return;
+      currPois.splice(idx, 1);
+      plotPois();
+      renderMsg("Removed stop. Re-run an algorithm.");
+      setAlgoActive(""); // clear highlight
+    });
+  });
 }
 
-// ===== Add POIs =====
 function addPOI(name, lat, lon) {
   currPois.push({ name, lat, lon });
-  plotPois(currPois);
-  enableAlgos(currPois.length >= 2);
-  renderMsg(`Added: ${name}`);
+  plotPois();
+  map.setView([lat, lon], 15);
+  renderMsg(`Added: ${name}.`);
 }
 
 // ===== Nominatim search (single result) =====
@@ -439,7 +359,7 @@ async function nominatimSearch(q) {
   return js[0];
 }
 
-// ===== Overpass (nearby cafes) =====
+// ===== Overpass recommend nearby =====
 async function overpassQuery(query) {
   const url = "https://overpass-api.de/api/interpreter";
   const res = await fetch(url, {
@@ -451,8 +371,8 @@ async function overpassQuery(query) {
   return await res.json();
 }
 
-function addNearbyMarker(p) {
-  const name = p.name || "Cafe";
+function addRecoMarker(p) {
+  const name = p.name || "Place";
   const lat = p.lat, lon = p.lon;
 
   const m = L.circleMarker([lat, lon], {
@@ -460,11 +380,11 @@ function addNearbyMarker(p) {
     weight: 2,
     opacity: 0.95,
     fillOpacity: 0.95
-  }).addTo(nearbyLayer);
+  }).addTo(recoLayer);
 
   m.bindPopup(`
     <b>${safe(name)}</b><br/>
-    <button id="add-${p._id}" type="button">Add to route</button>
+    <button id="add-${p._id}" type="button">Add stop</button>
   `);
 
   m.on("popupopen", () => {
@@ -477,27 +397,81 @@ function addNearbyMarker(p) {
   });
 }
 
-// ===== Bind UI =====
-async function loadDataset(path, label) {
-  try {
-    enableAlgos(false);
-    renderMsg(`Loading ${label} ...`);
-    const text = await loadText(path);
-    currPois = parseCsv(text);
-
-    plotPois(currPois);
-    enableAlgos(currPois.length >= 2);
-    renderMsg(`Loaded ${currPois.length} POIs. Pick an algorithm.`);
-  } catch (e) {
-    renderMsg(`Error: ${e.message}`);
-  }
+function scoreReco(el) {
+  // “Popular” proxy: prefer places with a name + more tags
+  // (True popularity/ratings require Google/Foursquare APIs.)
+  const tags = el.tags || {};
+  const named = tags.name ? 1 : 0;
+  const tagCount = Object.keys(tags).length;
+  return named * 100 + tagCount;
 }
 
+async function recommendNearby() {
+  if (!userLatLon) return renderMsg("Tap 'Use my location' first.");
+
+  const radiusM = 1400;
+  const f = overpassAmenityFilter();
+
+  renderMsg(`Finding nearby ${placeTypeLabel()}...`);
+  recoLayer.clearLayers();
+
+  const q = `
+[out:json][timeout:25];
+(
+  node${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
+  way${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
+  relation${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
+);
+out center tags;
+`;
+
+  const js = await overpassQuery(q);
+
+  const elems = (js.elements || []).slice();
+  elems.sort((a, b) => scoreReco(b) - scoreReco(a));
+
+  const pts = [];
+  for (let i = 0; i < elems.length; i++) {
+    const el = elems[i];
+    const lat = el.lat ?? el.center?.lat;
+    const lon = el.lon ?? el.center?.lon;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+    pts.push({
+      _id: `r${i}`,
+      lat,
+      lon,
+      name: el.tags?.name || "Place"
+    });
+  }
+
+  const top = pts.slice(0, 40);
+  if (!top.length) return renderMsg(`No nearby ${placeTypeLabel()} found.`);
+
+  top.forEach(addRecoMarker);
+
+  setOutHTML(`
+    <div class="route-header">
+      <div class="title">Recommended nearby • ${safe(placeTypeLabel())}</div>
+      <div class="meta">
+        <div class="chip">Shown: ${top.length}</div>
+        <div class="chip">Radius: ${(radiusM/1000).toFixed(1)} km</div>
+        <div class="chip">Tap marker → Add</div>
+      </div>
+    </div>
+    <div class="out-title">Tip: Add a few stops, then run NN / 2-opt / SA.</div>
+  `);
+
+  const bounds = L.latLngBounds(top.map(p => [p.lat, p.lon]));
+  map.fitBounds(bounds, { padding: [20, 20] });
+}
+
+// ===== Bind UI =====
 function bindUI() {
   enableAlgos(false);
   updateStartToggle();
 
-  // start toggle (POI[0] vs My Location)
+  // start mode
   document.getElementById("start-toggle")?.addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
     updateStartToggle();
@@ -507,29 +481,24 @@ function bindUI() {
     );
   });
 
-  // night mode toggle (UI + map)
+  // night mode
   document.getElementById("night-toggle")?.addEventListener("change", (e) => {
     const on = !!e.target.checked;
     document.body.classList.toggle("dark", on);
     setBasemap(on);
   });
 
-  // Place type segmented buttons
-function setType(t){
-  placeType = t;
-  setOn("type-cafe", t === "cafe");
-  setOn("type-night", t === "night");
-  renderMsg(`Mode: ${placeTypeLabel()}. Tap Nearby to search around you.`);
-}
-
-document.getElementById("type-cafe")?.addEventListener("click", () => setType("cafe"));
-document.getElementById("type-night")?.addEventListener("click", () => setType("night"));
-
-// default underlying mode (not highlighted unless you want)
-placeType = "cafe";
-
-
-
+  // type toggle (no gradient until selected)
+  function setType(t){
+    placeType = t;
+    setOn("type-cafe", t === "cafe");
+    setOn("type-night", t === "night");
+    renderMsg(`Mode: ${placeTypeLabel()}. Tap “Recommend nearby”.`);
+  }
+  document.getElementById("type-cafe")?.addEventListener("click", () => setType("cafe"));
+  document.getElementById("type-night")?.addEventListener("click", () => setType("night"));
+  // default mode, not highlighted:
+  placeType = "cafe";
 
   // location
   document.getElementById("loc-btn")?.addEventListener("click", () => {
@@ -543,29 +512,59 @@ placeType = "cafe";
 
         if (userMarker) map.removeLayer(userMarker);
         userMarker = L.circleMarker([lat, lon], {
-          radius: 9,
-          weight: 3,
-          opacity: 1,
-          fillOpacity: 1
+          radius: 9, weight: 3, opacity: 1, fillOpacity: 1
         }).addTo(map).bindPopup("You").openPopup();
 
         map.setView([lat, lon], 15);
-        renderMsg(`Location set: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
+        renderMsg(`Location set: ${lat.toFixed(5)}, ${lon.toFixed(5)}.`);
       },
       (err) => renderMsg(`Location error: ${err.message}`)
     );
   });
 
-  // load buttons
-  document.getElementById("load-small-btn")?.addEventListener("click", () =>
-    loadDataset("data/POI_small.csv", "POI_small.csv")
-  );
-  document.getElementById("load-medium-btn")?.addEventListener("click", () =>
-    loadDataset("data/POI_medium.csv", "POI_medium.csv")
-  );
-  document.getElementById("load-large-btn")?.addEventListener("click", () =>
-    loadDataset("data/POI_large.csv", "POI_large.csv")
-  );
+  // recommend nearby
+  document.getElementById("nearby-btn")?.addEventListener("click", recommendNearby);
+
+  // clear everything
+  document.getElementById("clear-btn")?.addEventListener("click", () => {
+    currPois = [];
+    plotPois();
+    recoLayer.clearLayers();
+    searchLayer.clearLayers();
+    clearRoute();
+    setAlgoActive("");
+    renderMsg("Cleared. Add stops or tap “Recommend nearby”.");
+  });
+
+  // search + add
+  const qEl = document.getElementById("search-q");
+  document.getElementById("search-add-btn")?.addEventListener("click", async () => {
+    const q = (qEl?.value || "").trim();
+    if (!q) return renderMsg("Type a place or address first.");
+
+    try {
+      renderMsg(`Searching: ${q} ...`);
+      const hit = await nominatimSearch(q);
+      if (!hit) return renderMsg("No results found. Try a more specific query.");
+
+      const name = hit.display_name.split(",").slice(0, 2).join(", ");
+      const lat = Number(hit.lat);
+      const lon = Number(hit.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return renderMsg("Bad search result. Try again.");
+
+      searchLayer.clearLayers();
+      L.marker([lat, lon]).addTo(searchLayer).bindPopup(`Added: ${safe(name)}`).openPopup();
+
+      addPOI(name, lat, lon);
+      if (qEl) qEl.value = "";
+    } catch (e) {
+      renderMsg(`Search error: ${e.message}`);
+    }
+  });
+
+  qEl?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("search-add-btn")?.click();
+  });
 
   // algos
   document.getElementById("algo-nn")?.addEventListener("click", () => {
@@ -600,109 +599,7 @@ placeType = "cafe";
     drawRoute(order);
     renderRoute(order, "Route (GA-lite)");
   });
-
-  // clear
-  document.getElementById("clear-btn")?.addEventListener("click", () => {
-    clearRoute();
-    renderMsg("Cleared route.");
-  });
-
-  // search add
-  const qEl = document.getElementById("search-q");
-  document.getElementById("search-add-btn")?.addEventListener("click", async () => {
-    const q = (qEl?.value || "").trim();
-    if (!q) return renderMsg("Type a place or address first.");
-
-    try {
-      renderMsg(`Searching: ${q} ...`);
-      const hit = await nominatimSearch(q);
-      if (!hit) return renderMsg("No results found. Try a more specific query.");
-
-      const name = hit.display_name.split(",").slice(0, 2).join(", ");
-      const lat = Number(hit.lat);
-      const lon = Number(hit.lon);
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return renderMsg("Bad search result. Try again.");
-
-      searchLayer.clearLayers();
-      L.marker([lat, lon]).addTo(searchLayer).bindPopup(`Added: ${safe(name)}`).openPopup();
-      map.setView([lat, lon], 15);
-
-      addPOI(name, lat, lon);
-      if (qEl) qEl.value = "";
-    } catch (e) {
-      renderMsg(`Search error: ${e.message}`);
-    }
-  });
-
-  qEl?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") document.getElementById("search-add-btn")?.click();
-  });
-
-  // nearby cafes (you can later swap to bars/clubs by changing the amenity filter)
-  document.getElementById("nearby-cafes-btn")?.addEventListener("click", async () => {
-    if (!userLatLon) return renderMsg("Tap 'Use my location' first.");
-
-    try {
-      const radiusM = 1200;
-      renderMsg("Searching nearby cafés...");
-      nearbyLayer.clearLayers();
-
-      const f = overpassAmenityFilter();
-
-const q = `
-[out:json][timeout:25];
-(
-  node${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
-  way${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
-  relation${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
-);
-out center tags;
-`;
-
-
-      const js = await overpassQuery(q);
-
-      const pts = [];
-      for (let i = 0; i < js.elements.length; i++) {
-        const el = js.elements[i];
-        const lat = el.lat ?? el.center?.lat;
-        const lon = el.lon ?? el.center?.lon;
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-
-        pts.push({
-          _id: `n${i}`,
-          lat,
-          lon,
-          name: el.tags?.name || "Cafe"
-        });
-      }
-
-      if (!pts.length) return renderMsg("No nearby cafés found in this radius.");
-
-      pts.slice(0, 60).forEach(addNearbyMarker);
-
-      setOutHTML(`
-        <div class="route-header">
-          <div class="title">Nearby cafés</div>
-          <div class="meta">
-            <div class="chip">Found: ${Math.min(pts.length, 60)}</div>
-            <div class="chip">Radius: ${(radiusM/1000).toFixed(1)} km</div>
-            <div class="chip">Tap marker → Add</div>
-          </div>
-        </div>
-      `);
-
-      const bounds = L.latLngBounds(pts.slice(0, 60).map(p => [p.lat, p.lon]));
-      map.fitBounds(bounds, { padding: [20, 20] });
-    } catch (e) {
-      renderMsg(`Nearby search error: ${e.message}`);
-    }
-  });
 }
 
 bindUI();
-renderMsg("Load POIs to begin.");
-
-
-
-
+renderMsg("Add stops or tap “Recommend nearby”.");
