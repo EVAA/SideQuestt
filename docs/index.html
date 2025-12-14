@@ -31,11 +31,18 @@
           Start: POI[0]
         </button>
 
+        <button class="ghost" id="loop-toggle" type="button" title="Toggle loop vs one-way">
+          Loop: ON
+        </button>
+
+
         <button id="algo-nn" type="button" disabled>NN</button>
         <button id="algo-2opt" type="button" disabled>NN + 2-opt</button>
         <button id="algo-sa" type="button" disabled>SA</button>
         <button id="algo-ga" type="button" disabled>GA-lite</button>
       </div>
+
+      
 
       <div class="search">
         <input id="search-q" type="text" placeholder="Search & add a stop (e.g., 'Bar Raval', 'Pilot Coffee', 'CN Tower')" />
@@ -59,7 +66,7 @@
   </header>
 
   <div id="map"></div>
-
+  <div id="toast" class="toast" aria-live="polite"></div>
   <div class="panel">
     <div id="out" class="out">
       <div class="out-title">Add stops or tap “Recommend nearby”.</div>

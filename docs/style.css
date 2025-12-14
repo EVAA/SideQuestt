@@ -326,4 +326,28 @@ body.dark .leaflet-control-attribution{
 .search-item:hover{
   background: rgba(124,58,237,0.12);
 }
+/* ===== Toast overlay ===== */
+.toast{
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  z-index: 5000;
+
+  background: var(--grad2);
+  color: #fff;
+  border-radius: 999px;
+  padding: 12px 16px;
+  font-weight: 800;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.toast.show{
+  opacity: 1;
+  transform: translateX(-50%) translateY(-6px);
+}
+
 

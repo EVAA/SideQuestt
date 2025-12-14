@@ -28,6 +28,20 @@ function setBasemap(isDark) {
 
   tileLayer.addTo(map);
 }
+
+// Loop mode: true = return to start, false = end at last POI
+let loopMode = true;
+
+function getAnchorLatLonForRecommendations() {
+  // If start mode is POI[0], recommend near POI[0] (if it exists)
+  if (startMode === "poi0" && currPois.length >= 1) {
+    return { lat: currPois[0].lat, lon: currPois[0].lon };
+  }
+  // Otherwise recommend near user location
+  return userLatLon;
+}
+
+
 setBasemap(false);
 
 // ===== Layers / state =====
@@ -76,9 +90,15 @@ function enableAlgos(ok) {
 }
 
 function overpassAmenityFilter() {
-  if (placeType === "night") return `["amenity"~"bar|pub|nightclub"]`;
+  // Bars + clubs
+  if (placeType === "night") {
+    // include bar, pub, nightclub
+    return `["amenity"~"bar|pub|nightclub"]`;
+  }
+  // Cafés
   return `["amenity"="cafe"]`;
 }
+
 function placeTypeLabel() {
   return (placeType === "night") ? "Bars + Clubs" : "Cafés";
 }
@@ -102,6 +122,16 @@ async function nominatimAutocomplete(q) {
   return await res.json();
 }
 
+function showToast(msg = "Added to route") {
+  const el = document.getElementById("toast");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove("show"), 900);
+}
+
+
 
 // ===== Distances =====
 function haversineKm(lat1, lon1, lat2, lon2) {
@@ -124,19 +154,31 @@ function distFromUserToIdx(i) {
 function routeLengthKm(order) {
   if (!order.length) return 0;
 
+  // Start = user
   if (startMode === "user" && userLatLon) {
     let tot = 0;
     tot += haversineKm(userLatLon.lat, userLatLon.lon, currPois[order[0]].lat, currPois[order[0]].lon);
-    for (let i = 0; i < order.length - 1; i++) tot += distPois(order[i], order[i + 1]);
-    tot += haversineKm(userLatLon.lat, userLatLon.lon, currPois[order[order.length - 1]].lat, currPois[order[order.length - 1]].lon);
+
+    for (let i = 0; i < order.length - 1; i++) {
+      tot += distPois(order[i], order[i + 1]);
+    }
+
+    if (loopMode) {
+      tot += haversineKm(
+        userLatLon.lat, userLatLon.lon,
+        currPois[order[order.length - 1]].lat, currPois[order[order.length - 1]].lon
+      );
+    }
     return tot;
   }
 
+  // Start = POI[0]
   let tot = 0;
   for (let i = 0; i < order.length - 1; i++) tot += distPois(order[i], order[i + 1]);
-  tot += distPois(order[order.length - 1], order[0]);
+  if (loopMode) tot += distPois(order[order.length - 1], order[0]);
   return tot;
 }
+
 
 // ===== Algorithms =====
 function nnOrder(startIdx = 0) {
@@ -294,13 +336,14 @@ function drawRoute(order) {
   if (!order.length) return;
 
   let pts = [];
+
   if (startMode === "user" && userLatLon) {
     pts.push([userLatLon.lat, userLatLon.lon]);
     pts.push(...order.map(i => [currPois[i].lat, currPois[i].lon]));
-    pts.push([userLatLon.lat, userLatLon.lon]);
+    if (loopMode) pts.push([userLatLon.lat, userLatLon.lon]);
   } else {
     pts = order.map(i => [currPois[i].lat, currPois[i].lon]);
-    pts.push([currPois[order[0]].lat, currPois[order[0]].lon]);
+    if (loopMode) pts.push([currPois[order[0]].lat, currPois[order[0]].lon]);
   }
 
   if (routeLine) map.removeLayer(routeLine);
@@ -420,6 +463,7 @@ function addRecoMarker(p) {
     if (!btn) return;
     btn.onclick = () => {
       addPOI(name, lat, lon);
+      showToast("Added to route");
       map.closePopup();
     };
   });
@@ -435,10 +479,8 @@ function scoreReco(el) {
 }
 
 async function recommendNearby() {
-  if (!userLatLon) {
-    renderMsg("Tap “Use my location” first.");
-    return;
-  }
+  const anchor = getAnchorLatLonForRecommendations();
+  if (!anchor) return renderMsg("Tap “Use my location” or add a first stop (POI[0]) first.");
 
   const radiusM = 1400;
   const f = overpassAmenityFilter();
@@ -449,57 +491,59 @@ async function recommendNearby() {
   const q = `
 [out:json][timeout:25];
 (
-  node${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
-  way${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
-  relation${f}(around:${radiusM},${userLatLon.lat},${userLatLon.lon});
+  node${f}(around:${radiusM},${anchor.lat},${anchor.lon});
+  way${f}(around:${radiusM},${anchor.lat},${anchor.lon});
+  relation${f}(around:${radiusM},${anchor.lat},${anchor.lon});
 );
 out center tags;
 `;
 
   try {
     const js = await overpassQuery(q);
-    console.log("Overpass result:", js);
+    const elems = (js.elements || []);
 
-    if (!js.elements || js.elements.length === 0) {
-      renderMsg(`No nearby ${placeTypeLabel()} found.`);
-      return;
-    }
+    if (!elems.length) return renderMsg(`No nearby ${placeTypeLabel()} found.`);
 
     const pts = [];
-    js.elements.forEach((el, i) => {
+    for (let i = 0; i < elems.length; i++) {
+      const el = elems[i];
       const lat = el.lat ?? el.center?.lat;
       const lon = el.lon ?? el.center?.lon;
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 
       pts.push({
         _id: `r${i}`,
         lat,
         lon,
-        name: el.tags?.name || placeTypeLabel().slice(0, -1)
+        name: el.tags?.name || "Place"
       });
-    });
+    }
 
-    pts.slice(0, 40).forEach(addRecoMarker);
+    const top = pts.slice(0, 40);
+    top.forEach(addRecoMarker);
+
+    const anchorLabel = (startMode === "poi0" && currPois.length) ? "POI[0]" : "My Location";
 
     setOutHTML(`
       <div class="route-header">
         <div class="title">Recommended nearby • ${safe(placeTypeLabel())}</div>
         <div class="meta">
-          <div class="chip">Shown: ${Math.min(40, pts.length)}</div>
+          <div class="chip">Near: ${safe(anchorLabel)}</div>
+          <div class="chip">Shown: ${top.length}</div>
           <div class="chip">Radius: ${(radiusM/1000).toFixed(1)} km</div>
           <div class="chip">Tap marker → Add</div>
         </div>
       </div>
     `);
 
-    const bounds = L.latLngBounds(pts.slice(0, 40).map(p => [p.lat, p.lon]));
+    const bounds = L.latLngBounds(top.map(p => [p.lat, p.lon]));
     map.fitBounds(bounds, { padding: [20, 20] });
 
   } catch (e) {
-    console.error(e);
-    renderMsg("Nearby search failed. Try again in a moment.");
+    renderMsg(`Nearby search failed. Try again.`);
   }
 }
+
 
 
   const top = pts.slice(0, 40);
@@ -527,6 +571,24 @@ out center tags;
 function bindUI() {
   enableAlgos(false);
   updateStartToggle();
+  
+  function updateLoopToggle() {
+  const b = document.getElementById("loop-toggle");
+  if (!b) return;
+  b.textContent = loopMode ? "Loop: ON" : "Loop: OFF";
+  setOn("loop-toggle", loopMode);
+}
+
+updateLoopToggle();
+
+document.getElementById("loop-toggle")?.addEventListener("click", () => {
+  loopMode = !loopMode;
+  updateLoopToggle();
+
+  // If a route is already drawn, re-draw it with the current active algo
+  renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
+});
+
 
   // start mode
   document.getElementById("start-toggle")?.addEventListener("click", () => {
