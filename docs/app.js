@@ -63,6 +63,35 @@ function safe(s) {
 }
 function renderMsg(msg) { setOutHTML(`<div class="out-title">${safe(msg)}</div>`); }
 
+function accentStyle() {
+  const isNight = document.body.classList.contains("dark");
+  if (isNight) {
+    return { color: "#ff1f7a", fillColor: "#ff1f7a" }; // hot pink
+  }
+  return { color: "#0ea5e9", fillColor: "#0ea5e9" };   // blue (day)
+}
+
+function refreshMapStyles() {
+  const a = accentStyle();
+
+  poiLayer.eachLayer(l => {
+    if (l && l.setStyle) l.setStyle({ ...a });
+  });
+
+  recoLayer.eachLayer(l => {
+    if (l && l.setStyle) l.setStyle({ ...a });
+  });
+
+  searchLayer.eachLayer(l => {
+    if (l && l.setStyle) l.setStyle({ ...a });
+  });
+
+  if (routeLine && routeLine.setStyle) {
+    routeLine.setStyle({ color: a.color });
+  }
+}
+
+
 function setOn(id, on) {
   const el = document.getElementById(id);
   if (!el) return;
@@ -342,7 +371,14 @@ function drawRoute(order) {
   }
 
   if (routeLine) map.removeLayer(routeLine);
-  routeLine = L.polyline(pts, { weight: 7, opacity: 0.95, lineJoin: "round" }).addTo(map);
+  const a = accentStyle();
+  routeLine = L.polyline(pts, {
+  weight: 7,
+  opacity: 0.95,
+  lineJoin: "round",
+  color: a.color
+}).addTo(map);
+
 }
 
 function renderRoute(order, label) {
@@ -464,12 +500,14 @@ function addRecoMarker(p) {
   ? { color: "#ff4d9d", fillColor: "#ff1f7a" }   // bars/clubs in night mode (hot pink)
   : { color: "#7c3aed", fillColor: "#0ea5e9" };  // default (purple/blue)
 
+  const a = accentStyle();
   const m = L.circleMarker([lat, lon], {
   radius: 7,
   weight: 2,
   opacity: 0.95,
   fillOpacity: 0.95,
-  ...style
+  color: a.color,
+  fillColor: a.fillColor
 }).addTo(recoLayer);
 
 }
@@ -482,10 +520,9 @@ function scoreReco(el) {
 }
 
 async function recommendNearby() {
+  const radiusM = Number(document.getElementById("radius-slider")?.value) || nearbyRadiusM || 1400;
   const anchor = getAnchorLatLonForRecommendations();
   if (!anchor) return renderMsg("Tap “Use my location” or add a first stop (POI[0]) first.");
-
-  const radiusM = nearbyRadiusM || 1400;
   const f = overpassAmenityFilter();
 
   renderMsg(`Finding nearby ${placeTypeLabel()}…`);
@@ -613,6 +650,7 @@ if (rEl) {
     const on = !!e.target.checked;
     document.body.classList.toggle("dark", on);
     setBasemap(on);
+    refreshMapStyles();
   });
 
   // ---- Gradient theme picker ----
