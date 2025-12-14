@@ -97,11 +97,11 @@ button:active{ transform: translateY(1px); }
 button:disabled{ opacity: 0.55; cursor: not-allowed; }
 
 button.primary{
-  border: none;
-  background: var(--grad);
-  color: #ffffff;
-  box-shadow: 0 10px 24px rgba(124,58,237,0.25);
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
 }
+
 
 button.ghost{
   background: transparent;
