@@ -14,6 +14,8 @@ L.tileLayer(
 let userMarker = null;
 let poiLayer = L.layerGroup().addTo(map);
 let searchLayer = L.layerGroup().addTo(map);
+let nearbyLayer = L.layerGroup().addTo(map);
+
 
 let currPois = [];
 let routeLine = null;
@@ -318,6 +320,59 @@ async function nominatimSearch(q) {
   return js[0];
 }
 
+
+async function overpassQuery(query) {
+  const url = "https://overpass-api.de/api/interpreter";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+    body: "data=" + encodeURIComponent(query)
+  });
+  if (!res.ok) throw new Error(`Overpass failed: ${res.status}`);
+  return await res.json();
+}
+
+function metersToKm(m) { return m / 1000.0; }
+
+function renderNearbyCard(n, radiusM) {
+  setOutHTML(`
+    <div class="route-header">
+      <div class="title">Nearby cafés</div>
+      <div class="meta">
+        <div class="chip">Found: ${n}</div>
+        <div class="chip">Radius: ${metersToKm(radiusM).toFixed(1)} km</div>
+      </div>
+    </div>
+    <div class="out-title">Tap a marker to add it to your route (or use search).</div>
+  `);
+}
+
+function addNearbyMarker(p) {
+  const name = p.name || "Cafe";
+  const lat = p.lat, lon = p.lon;
+
+  const m = L.circleMarker([lat, lon], {
+    radius: 7,
+    weight: 2,
+    opacity: 0.95,
+    fillOpacity: 0.95
+  }).addTo(nearbyLayer);
+
+  m.bindPopup(`
+    <b>${safe(name)}</b><br/>
+    <button id="add-${p._id}" type="button">Add to route</button>
+  `);
+
+  m.on("popupopen", () => {
+    const btn = document.getElementById(`add-${p._id}`);
+    if (!btn) return;
+    btn.onclick = () => {
+      addPOI(name, lat, lon);
+      map.closePopup();
+    };
+  });
+}
+
 function addPOI(name, lat, lon) {
   currPois.push({ name, lat, lon });
   plotPois(currPois);
@@ -344,6 +399,7 @@ function bindUI() {
   enableAlgos(false);
   updateStartToggle();
 
+  // Toggle start mode
   document.getElementById("start-toggle").addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
     updateStartToggle();
@@ -353,8 +409,10 @@ function bindUI() {
     );
   });
 
+  // Get user location
   document.getElementById("loc-btn").addEventListener("click", () => {
     if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
+
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const lat = pos.coords.latitude;
@@ -363,73 +421,87 @@ function bindUI() {
         userLatLon = { lat, lon };
 
         if (userMarker) map.removeLayer(userMarker);
-       userMarker = L.circleMarker([lat, lon], {
-  radius: 9,
-  weight: 3,
-  opacity: 1,
-  fillOpacity: 1
-}).addTo(map).bindPopup("You").openPopup();
+        userMarker = L.circleMarker([lat, lon], {
+          radius: 9,
+          weight: 3,
+          opacity: 1,
+          fillOpacity: 1
+        }).addTo(map).bindPopup("You").openPopup();
 
         map.setView([lat, lon], 15);
-
         renderMsg(`Location set: ${lat.toFixed(5)}, ${lon.toFixed(5)}`);
       },
       (err) => renderMsg(`Location error: ${err.message}`)
     );
   });
 
-  async function loadDataset(path, label) {
+  // Nearby cafes (Overpass)
+  document.getElementById("nearby-cafes-btn").addEventListener("click", async () => {
+    if (!userLatLon) return renderMsg("Tap 'Use my location' first.");
+
     try {
-      enableAlgos(false);
-      renderMsg(`Loading ${label} ...`);
-      const text = await loadText(path);
-      currPois = parseCsv(text);
-      plotPois(currPois);
-      enableAlgos(currPois.length >= 2);
-      renderLoaded(currPois.length);
+      const radiusM = 1200;
+      renderMsg("Searching nearby cafés...");
+
+      nearbyLayer.clearLayers();
+
+      const q = `
+[out:json][timeout:25];
+(
+  node["amenity"="cafe"](around:${radiusM},${userLatLon.lat},${userLatLon.lon});
+  way["amenity"="cafe"](around:${radiusM},${userLatLon.lat},${userLatLon.lon});
+  relation["amenity"="cafe"](around:${radiusM},${userLatLon.lat},${userLatLon.lon});
+);
+out center tags;
+      `;
+
+      const js = await overpassQuery(q);
+
+      const pts = [];
+      for (let i = 0; i < js.elements.length; i++) {
+        const el = js.elements[i];
+        const lat = el.lat ?? el.center?.lat;
+        const lon = el.lon ?? el.center?.lon;
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+        pts.push({
+          _id: `n${i}`,
+          lat,
+          lon,
+          name: el.tags?.name || "Cafe"
+        });
+      }
+
+      pts.slice(0, 60).forEach(addNearbyMarker);
+
+      if (!pts.length) return renderMsg("No nearby cafés found in this radius.");
+
+      setOutHTML(`
+        <div class="route-header">
+          <div class="title">Nearby cafés</div>
+          <div class="meta">
+            <div class="chip">Found: ${Math.min(pts.length, 60)}</div>
+            <div class="chip">Radius: ${(radiusM/1000).toFixed(1)} km</div>
+            <div class="chip">Tap marker → Add</div>
+          </div>
+        </div>
+      `);
+
+      const bounds = L.latLngBounds(pts.slice(0, 60).map(p => [p.lat, p.lon]));
+      map.fitBounds(bounds, { padding: [20, 20] });
+
     } catch (e) {
-      renderMsg(`Error: ${e.message}`);
+      renderMsg(`Nearby search error: ${e.message}`);
     }
-  }
-
-  document.getElementById("load-small-btn").addEventListener("click", () => loadDataset("data/POI_small.csv", "POI_small.csv"));
-  document.getElementById("load-medium-btn").addEventListener("click", () => loadDataset("data/POI_medium.csv", "POI_medium.csv"));
-  document.getElementById("load-large-btn").addEventListener("click", () => loadDataset("data/POI_large.csv", "POI_large.csv"));
-
-  document.getElementById("algo-nn").addEventListener("click", () => {
-    if (currPois.length < 2) return;
-    const order = getBaseOrder();
-    drawRoute(order);
-    renderRoute(order, "Route (NN)");
   });
 
-  document.getElementById("algo-2opt").addEventListener("click", () => {
-    if (currPois.length < 2) return;
-    const order = twoOpt(getBaseOrder());
-    drawRoute(order);
-    renderRoute(order, "Route (NN + 2-opt)");
-  });
-
-  document.getElementById("algo-sa").addEventListener("click", () => {
-    if (currPois.length < 2) return;
-    const base = twoOpt(getBaseOrder());
-    const order = saOrder(base, 2500);
-    drawRoute(order);
-    renderRoute(order, "Route (SA)");
-  });
-
-  document.getElementById("algo-ga").addEventListener("click", () => {
-    if (currPois.length < 2) return;
-    const order = gaLite(40);
-    drawRoute(order);
-    renderRoute(order, "Route (GA-lite)");
-  });
-
+  // Clear route
   document.getElementById("clear-btn").addEventListener("click", () => {
     clearRoute();
     renderMsg("Cleared route.");
   });
 
+  // Search + add (Nominatim)
   const qEl = document.getElementById("search-q");
   document.getElementById("search-add-btn").addEventListener("click", async () => {
     const q = (qEl.value || "").trim();
@@ -460,7 +532,10 @@ function bindUI() {
   qEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter") document.getElementById("search-add-btn").click();
   });
+
+  // Keep your dataset load + algo button listeners below this
 }
+
 
 bindUI();
 renderMsg("Load POIs to begin.");
