@@ -393,5 +393,29 @@ body.dark .leaflet-control-attribution{
   color: rgba(255,255,255,0.75) !important;
   border: 1px solid rgba(255,255,255,0.10) !important;
 }
+/* Make header stack on smaller widths + show toggles */
+.header-inner{
+  display: grid;
+  gap: 12px;
+}
+
+/* Force controls/search/toggles to take full width rows */
+.controls,
+.search,
+.toggles{
+  width: 100%;
+}
+
+/* If you previously had header overflow hidden, undo it */
+header{
+  overflow: visible;
+}
+
+/* Ensure toggles aren't collapsed */
+.toggles{
+  display: grid;
+  gap: 10px;
+  align-items: center;
+}
 
 

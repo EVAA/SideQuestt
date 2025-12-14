@@ -10,59 +10,58 @@
 </head>
 
 <body>
-  <header>
-    <div class="header-inner">
-      <div class="brand">
-        <div class="title">
-          <div class="badge"></div>
-          <div>
-            <h1>SideQuest</h1>
-            <p class="sub">Toronto • route prototype</p>
-          </div>
+    <header>
+  <div class="header-inner">
+    <div class="brand">
+      <div class="title">
+        <div class="badge"></div>
+        <div>
+          <h1>SideQuest</h1>
+          <p class="sub">Toronto • route prototype</p>
         </div>
-        <button class="ghost" id="clear-btn" type="button">Clear</button>
       </div>
-
-      <div class="controls">
-        <button id="loc-btn" type="button">Use my location</button>
-        <button id="nearby-cafes-btn" type="button">Nearby</button>
-
-
-        <button id="load-small-btn" type="button">Load Small</button>
-        <button id="load-medium-btn" type="button">Load Medium</button>
-
-        <button id="load-large-btn" type="button">Load Large</button>
-        <button class="ghost" id="start-toggle" type="button" title="Toggle start mode">
-          Start: POI[0]
-        </button>
-
-        <button class="primary" id="algo-nn" type="button" disabled>NN</button>
-        <button id="algo-2opt" type="button" disabled>NN + 2-opt</button>
-
-        <button id="algo-sa" type="button" disabled>SA</button>
-        <button id="algo-ga" type="button" disabled>GA-lite</button>
-      </div>
-
-      <div class="search">
-        <input id="search-q" type="text" placeholder="Search & add a new stop (e.g., 'Bar Raval', 'CN Tower')" />
-        <button id="search-add-btn" type="button">Add</button>
-      </div>
-      <div class="toggles">
-  <div class="seg" role="group" aria-label="Place type">
-    <button id="type-cafe" class="seg-btn active" type="button">Cafés</button>
-    <button id="type-bar" class="seg-btn" type="button">Bars</button>
-    <button id="type-club" class="seg-btn" type="button">Clubs</button>
-  </div>
-
-  <label class="switch">
-    <input id="night-toggle" type="checkbox" />
-    <span class="slider"></span>
-    <span class="switch-label">Night mode</span>
-  </label>
-</div>
-
+      <button class="ghost" id="clear-btn" type="button">Clear</button>
     </div>
-  </header>
+
+    <div class="controls">
+      <button id="loc-btn" type="button">Use my location</button>
+      <button id="nearby-cafes-btn" type="button">Nearby</button>
+
+      <button id="load-small-btn" type="button">Load Small</button>
+      <button id="load-medium-btn" type="button">Load Medium</button>
+      <button id="load-large-btn" type="button">Load Large</button>
+
+      <button class="ghost" id="start-toggle" type="button" title="Toggle start mode">
+        Start: POI[0]
+      </button>
+
+      <button class="primary" id="algo-nn" type="button" disabled>NN</button>
+      <button id="algo-2opt" type="button" disabled>NN + 2-opt</button>
+      <button id="algo-sa" type="button" disabled>SA</button>
+      <button id="algo-ga" type="button" disabled>GA-lite</button>
+    </div>
+
+    <div class="search">
+      <input id="search-q" type="text"
+        placeholder="Search & add a new stop (e.g., 'Bar Raval', 'CN Tower')" />
+      <button id="search-add-btn" type="button">Add</button>
+    </div>
+
+    <div class="toggles">
+      <div class="seg" role="group" aria-label="Place type">
+        <button id="type-cafe" class="seg-btn active" type="button">Cafés</button>
+        <button id="type-bar" class="seg-btn" type="button">Bars</button>
+        <button id="type-club" class="seg-btn" type="button">Clubs</button>
+      </div>
+
+      <label class="switch">
+        <input id="night-toggle" type="checkbox" />
+        <span class="slider"></span>
+        <span class="switch-label">Night mode</span>
+      </label>
+    </div>
+  </div>
+</header>
 
   <div id="map"></div>
 
