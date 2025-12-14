@@ -429,4 +429,8 @@ button.is-on:disabled{
   opacity: 0.6;
 }
 
+.seg-2{
+  grid-template-columns: 1fr 1fr;
+}
+
 

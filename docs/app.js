@@ -70,16 +70,16 @@ let userLatLon = null;
 let placeType = "cafe"; // "cafe" | "bar" | "club"
 
 function overpassAmenityFilter() {
-  if (placeType === "bar") return `["amenity"~"bar|pub"]`;
-  if (placeType === "club") return `["amenity"="nightclub"]`;
+  if (placeType === "night") return `["amenity"~"bar|pub|nightclub"]`;
   return `["amenity"="cafe"]`;
 }
 
+
 function placeTypeLabel() {
-  if (placeType === "bar") return "Bars";
-  if (placeType === "club") return "Clubs";
+  if (placeType === "night") return "Bars + Clubs";
   return "Cafés";
 }
+
 
 // ===== UI helpers =====
 function setOutHTML(html) { out.innerHTML = html; }
@@ -518,17 +518,17 @@ function bindUI() {
 function setType(t){
   placeType = t;
   setOn("type-cafe", t === "cafe");
-  setOn("type-bar", t === "bar");
-  setOn("type-club", t === "club");
+  setOn("type-night", t === "night");
   renderMsg(`Mode: ${placeTypeLabel()}. Tap Nearby to search around you.`);
 }
 
 document.getElementById("type-cafe")?.addEventListener("click", () => setType("cafe"));
-document.getElementById("type-bar")?.addEventListener("click", () => setType("bar"));
-document.getElementById("type-club")?.addEventListener("click", () => setType("club"));
+document.getElementById("type-night")?.addEventListener("click", () => setType("night"));
 
-// default mode on load
-setType("cafe");
+// default underlying mode (not highlighted unless you want)
+placeType = "cafe";
+
+
 
 
   // location
