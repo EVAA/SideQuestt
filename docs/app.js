@@ -1,7 +1,6 @@
 console.log("app.js loaded");
 const out = document.getElementById("out");
 
-
 // Toronto bounding box (SW, NE)
 const TORONTO_BOUNDS = {
   minLat: 43.5810,
@@ -30,21 +29,10 @@ function setBasemap(isDark) {
 
   tileLayer.addTo(map);
 }
+setBasemap(false);
 
 // Loop mode: true = return to start, false = end at last POI
 let loopMode = true;
-
-function getAnchorLatLonForRecommendations() {
-  // If start mode is POI[0], recommend near POI[0] (if it exists)
-  if (startMode === "poi0" && currPois.length >= 1) {
-    return { lat: currPois[0].lat, lon: currPois[0].lon };
-  }
-  // Otherwise recommend near user location
-  return userLatLon;
-}
-
-
-setBasemap(false);
 
 // ===== Layers / state =====
 let userMarker = null;
@@ -71,13 +59,13 @@ function safe(s) {
 }
 function renderMsg(msg) { setOutHTML(`<div class="out-title">${safe(msg)}</div>`); }
 
-function setOn(id, on){
+function setOn(id, on) {
   const el = document.getElementById(id);
   if (!el) return;
   el.classList.toggle("is-on", !!on);
 }
-function setAlgoActive(id){
-  ["algo-nn","algo-2opt","algo-sa","algo-ga"].forEach(x => setOn(x, x === id));
+function setAlgoActive(id) {
+  ["algo-nn", "algo-2opt", "algo-sa", "algo-ga"].forEach(x => setOn(x, x === id));
 }
 function updateStartToggle() {
   const btn = document.getElementById("start-toggle");
@@ -85,24 +73,31 @@ function updateStartToggle() {
   btn.textContent = (startMode === "poi0") ? "Start: POI[0]" : "Start: My Location";
 }
 function enableAlgos(ok) {
-  ["algo-nn","algo-2opt","algo-sa","algo-ga"].forEach(id => {
+  ["algo-nn", "algo-2opt", "algo-sa", "algo-ga"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = !ok;
   });
 }
 
+function placeTypeLabel() {
+  return (placeType === "night") ? "Bars + Clubs" : "Cafés";
+}
+
 function overpassAmenityFilter() {
-  // Bars + clubs
   if (placeType === "night") {
-    // include bar, pub, nightclub
+    // bar, pub, nightclub
     return `["amenity"~"bar|pub|nightclub"]`;
   }
-  // Cafés
   return `["amenity"="cafe"]`;
 }
 
-function placeTypeLabel() {
-  return (placeType === "night") ? "Bars + Clubs" : "Cafés";
+function getAnchorLatLonForRecommendations() {
+  // If start mode is POI[0], recommend near POI[0] (if it exists)
+  if (startMode === "poi0" && currPois.length >= 1) {
+    return { lat: currPois[0].lat, lon: currPois[0].lon };
+  }
+  // Otherwise recommend near user location
+  return userLatLon;
 }
 
 async function nominatimAutocomplete(q) {
@@ -116,10 +111,7 @@ async function nominatimAutocomplete(q) {
     `&lat=${userLatLon.lat}&lon=${userLatLon.lon}` +
     `&q=${encodeURIComponent(q)}`;
 
-  const res = await fetch(url, {
-    headers: { "Accept": "application/json" }
-  });
-
+  const res = await fetch(url, { headers: { "Accept": "application/json" } });
   if (!res.ok) return [];
   return await res.json();
 }
@@ -133,16 +125,14 @@ function showToast(msg = "Added to route") {
   showToast._t = setTimeout(() => el.classList.remove("show"), 900);
 }
 
-
-
 // ===== Distances =====
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371.0;
   const toRad = d => d * Math.PI / 180.0;
   const p1 = toRad(lat1), p2 = toRad(lat2);
   const dp = toRad(lat2 - lat1), dl = toRad(lon2 - lon1);
-  const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
-  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 function distPois(i, j) {
   const a = currPois[i], b = currPois[j];
@@ -180,7 +170,6 @@ function routeLengthKm(order) {
   if (loopMode) tot += distPois(order[order.length - 1], order[0]);
   return tot;
 }
-
 
 // ===== Algorithms =====
 function nnOrder(startIdx = 0) {
@@ -242,7 +231,7 @@ function twoOpt(order) {
         const c = order[k], d = order[k + 1];
 
         const before = distPois(a, b) + distPois(c, d);
-        const after  = distPois(a, c) + distPois(b, d);
+        const after = distPois(a, c) + distPois(b, d);
 
         if (after + 1e-12 < before) {
           const seg = order.slice(i, k + 1).reverse();
@@ -402,7 +391,6 @@ function renderRoute(order, label) {
     <ol class="route-bubbles">${items.join("")}</ol>
   `);
 
-  // Remove handlers (map index -> actual POI idx)
   document.querySelectorAll("[data-del]").forEach(btn => {
     btn.addEventListener("click", () => {
       const idx = Number(btn.getAttribute("data-del"));
@@ -410,7 +398,7 @@ function renderRoute(order, label) {
       currPois.splice(idx, 1);
       plotPois();
       renderMsg("Removed stop. Re-run an algorithm.");
-      setAlgoActive(""); // clear highlight
+      setAlgoActive("");
     });
   });
 }
@@ -420,16 +408,6 @@ function addPOI(name, lat, lon) {
   plotPois();
   map.setView([lat, lon], 15);
   renderMsg(`Added: ${name}.`);
-}
-
-// ===== Nominatim search (single result) =====
-async function nominatimSearch(q) {
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
-  const res = await fetch(url, { headers: { "Accept": "application/json" } });
-  if (!res.ok) throw new Error(`Search failed: ${res.status}`);
-  const js = await res.json();
-  if (!js.length) return null;
-  return js[0];
 }
 
 // ===== Overpass recommend nearby =====
@@ -472,8 +450,6 @@ function addRecoMarker(p) {
 }
 
 function scoreReco(el) {
-  // “Popular” proxy: prefer places with a name + more tags
-  // (True popularity/ratings require Google/Foursquare APIs.)
   const tags = el.tags || {};
   const named = tags.name ? 1 : 0;
   const tagCount = Object.keys(tags).length;
@@ -503,7 +479,6 @@ out center tags;
   try {
     const js = await overpassQuery(q);
     const elems = (js.elements || []);
-
     if (!elems.length) return renderMsg(`No nearby ${placeTypeLabel()} found.`);
 
     const pts = [];
@@ -517,11 +492,15 @@ out center tags;
         _id: `r${i}`,
         lat,
         lon,
-        name: el.tags?.name || "Place"
+        name: el.tags?.name || "Place",
+        _score: scoreReco(el)
       });
     }
 
+    pts.sort((a, b) => (b._score - a._score));
     const top = pts.slice(0, 40);
+    if (!top.length) return renderMsg(`No nearby ${placeTypeLabel()} found.`);
+
     top.forEach(addRecoMarker);
 
     const anchorLabel = (startMode === "poi0" && currPois.length) ? "POI[0]" : "My Location";
@@ -542,57 +521,31 @@ out center tags;
     map.fitBounds(bounds, { padding: [20, 20] });
 
   } catch (e) {
-    renderMsg(`Nearby search failed. Try again.`);
+    console.error(e);
+    renderMsg("Nearby search failed. Try again.");
   }
 }
-
-
-
-  const top = pts.slice(0, 40);
-  if (!top.length) return renderMsg(`No nearby ${placeTypeLabel()} found.`);
-
-  top.forEach(addRecoMarker);
-
-  setOutHTML(`
-    <div class="route-header">
-      <div class="title">Recommended nearby • ${safe(placeTypeLabel())}</div>
-      <div class="meta">
-        <div class="chip">Shown: ${top.length}</div>
-        <div class="chip">Radius: ${(radiusM/1000).toFixed(1)} km</div>
-        <div class="chip">Tap marker → Add</div>
-      </div>
-    </div>
-    <div class="out-title">Tip: Add a few stops, then run NN / 2-opt / SA.</div>
-  `);
-
-  const bounds = L.latLngBounds(top.map(p => [p.lat, p.lon]));
-  map.fitBounds(bounds, { padding: [20, 20] });
-
 
 // ===== Bind UI =====
 function bindUI() {
   enableAlgos(false);
   updateStartToggle();
-  
+
   function updateLoopToggle() {
-  const b = document.getElementById("loop-toggle");
-  if (!b) return;
-  b.textContent = loopMode ? "Loop: ON" : "Loop: OFF";
-  setOn("loop-toggle", loopMode);
-}
+    const b = document.getElementById("loop-toggle");
+    if (!b) return;
+    b.textContent = loopMode ? "Loop: ON" : "Loop: OFF";
+    setOn("loop-toggle", loopMode);
+  }
 
-updateLoopToggle();
-
-document.getElementById("loop-toggle")?.addEventListener("click", () => {
-  loopMode = !loopMode;
   updateLoopToggle();
 
-  // If a route is already drawn, re-draw it with the current active algo
-  renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
-});
+  document.getElementById("loop-toggle")?.addEventListener("click", () => {
+    loopMode = !loopMode;
+    updateLoopToggle();
+    renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
+  });
 
-
-  // start mode
   document.getElementById("start-toggle")?.addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
     updateStartToggle();
@@ -602,15 +555,13 @@ document.getElementById("loop-toggle")?.addEventListener("click", () => {
     );
   });
 
-  // night mode
   document.getElementById("night-toggle")?.addEventListener("change", (e) => {
     const on = !!e.target.checked;
     document.body.classList.toggle("dark", on);
     setBasemap(on);
   });
 
-  // type toggle (no gradient until selected)
-  function setType(t){
+  function setType(t) {
     placeType = t;
     setOn("type-cafe", t === "cafe");
     setOn("type-night", t === "night");
@@ -618,10 +569,8 @@ document.getElementById("loop-toggle")?.addEventListener("click", () => {
   }
   document.getElementById("type-cafe")?.addEventListener("click", () => setType("cafe"));
   document.getElementById("type-night")?.addEventListener("click", () => setType("night"));
-  // default mode, not highlighted:
   placeType = "cafe";
 
-  // location
   document.getElementById("loc-btn")?.addEventListener("click", () => {
     if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
 
@@ -643,10 +592,8 @@ document.getElementById("loop-toggle")?.addEventListener("click", () => {
     );
   });
 
-  // recommend nearby
   document.getElementById("nearby-btn")?.addEventListener("click", recommendNearby);
 
-  // clear everything
   document.getElementById("clear-btn")?.addEventListener("click", () => {
     currPois = [];
     plotPois();
@@ -657,70 +604,60 @@ document.getElementById("loop-toggle")?.addEventListener("click", () => {
     renderMsg("Cleared. Add stops or tap “Recommend nearby”.");
   });
 
-  // search + add
-  // search + autocomplete (Toronto-bounded + proximity)
-const qEl = document.getElementById("search-q");
-const resultsEl = document.getElementById("search-results");
+  // search + autocomplete
+  const qEl = document.getElementById("search-q");
+  const resultsEl = document.getElementById("search-results");
 
-qEl?.addEventListener("input", async () => {
-  const q = (qEl.value || "").trim();
-  if (!resultsEl) return;
+  qEl?.addEventListener("input", async () => {
+    const q = (qEl.value || "").trim();
+    if (!resultsEl) return;
 
-  resultsEl.innerHTML = "";
-  if (q.length < 3) return;
-  if (!userLatLon) return; // requires location for proximity sorting
+    resultsEl.innerHTML = "";
+    if (q.length < 3) return;
+    if (!userLatLon) return;
 
-  const hits = await nominatimAutocomplete(q);
+    const hits = await nominatimAutocomplete(q);
 
-  hits.slice(0, 3).forEach(hit => {
-    const div = document.createElement("div");
-    div.className = "search-item";
-    div.textContent = hit.display_name.split(",").slice(0, 3).join(", ");
+    hits.slice(0, 3).forEach(hit => {
+      const div = document.createElement("div");
+      div.className = "search-item";
+      div.textContent = hit.display_name.split(",").slice(0, 3).join(", ");
 
-    div.onclick = () => {
-      const lat = Number(hit.lat);
-      const lon = Number(hit.lon);
-      const name = hit.display_name.split(",")[0];
+      div.onclick = () => {
+        const lat = Number(hit.lat);
+        const lon = Number(hit.lon);
+        const name = hit.display_name.split(",")[0];
 
-      addPOI(name, lat, lon);
-      map.setView([lat, lon], 15);
+        addPOI(name, lat, lon);
+        map.setView([lat, lon], 15);
 
-      qEl.value = "";
-      resultsEl.innerHTML = "";
-    };
+        qEl.value = "";
+        resultsEl.innerHTML = "";
+      };
 
-    resultsEl.appendChild(div);
+      resultsEl.appendChild(div);
+    });
   });
-});
 
-// “Add” button uses the first suggestion (or falls back to 1-shot search if you keep it)
-document.getElementById("search-add-btn")?.addEventListener("click", async () => {
-  const q = (qEl?.value || "").trim();
-  if (!q) return renderMsg("Type a place first.");
+  document.getElementById("search-add-btn")?.addEventListener("click", async () => {
+    const q = (qEl?.value || "").trim();
+    if (!q) return renderMsg("Type a place first.");
+    if (!userLatLon) return renderMsg("Tap “Use my location” first (needed for closest results).");
 
-  if (!userLatLon) return renderMsg("Tap “Use my location” first (needed for closest results).");
+    const hits = await nominatimAutocomplete(q);
+    if (!hits.length) return renderMsg("No results found. Try a more specific query.");
 
-  const hits = await nominatimAutocomplete(q);
-  if (!hits.length) return renderMsg("No results found. Try a more specific query.");
+    const hit = hits[0];
+    const lat = Number(hit.lat);
+    const lon = Number(hit.lon);
+    const name = hit.display_name.split(",")[0];
 
-  const hit = hits[0];
-  const lat = Number(hit.lat);
-  const lon = Number(hit.lon);
-  const name = hit.display_name.split(",")[0];
+    addPOI(name, lat, lon);
+    map.setView([lat, lon], 15);
 
-  addPOI(name, lat, lon);
-  map.setView([lat, lon], 15);
-
-  if (qEl) qEl.value = "";
-  if (resultsEl) resultsEl.innerHTML = "";
-});
-
-// hide dropdown on Enter
-qEl?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") document.getElementById("search-add-btn")?.click();
-});
-
-
+    if (qEl) qEl.value = "";
+    if (resultsEl) resultsEl.innerHTML = "";
+  });
 
   qEl?.addEventListener("keydown", (e) => {
     if (e.key === "Enter") document.getElementById("search-add-btn")?.click();
@@ -765,4 +702,3 @@ window.addEventListener("DOMContentLoaded", () => {
   bindUI();
   renderMsg("Add stops or tap “Recommend nearby”.");
 });
-

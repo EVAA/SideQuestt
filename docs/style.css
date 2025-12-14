@@ -12,6 +12,7 @@
 
 *{ box-sizing: border-box; }
 html, body{ height: 100%; }
+
 body{
   margin: 0;
   background: radial-gradient(1200px 800px at 20% -10%, rgba(124,58,237,0.14), transparent 60%),
@@ -78,6 +79,7 @@ h1{
 }
 
 .search{
+  position: relative;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
@@ -187,7 +189,7 @@ button.is-on{
   width: 100%;
 }
 
-
+/* Panel */
 .panel{
   max-width: 1100px;
   margin: 12px auto 18px;
@@ -261,9 +263,7 @@ button.is-on{
   font-weight: 850;
 }
 
-.name{
-  font-weight: 750;
-}
+.name{ font-weight: 750; }
 
 .hint{
   font-size: 12px;
@@ -285,36 +285,16 @@ button.is-on{
   cursor: pointer;
 }
 
-/* Dark theme */
-body.dark{
-  --bg: #0b1020;
-  --card: rgba(255,255,255,0.06);
-  --text: #e5e7eb;
-  --muted: rgba(229,231,235,0.70);
-  --border: rgba(255,255,255,0.10);
-  --shadow: 0 14px 30px rgba(0,0,0,0.35);
-  --shadow2: 0 8px 16px rgba(0,0,0,0.35);
-  --grad: linear-gradient(90deg, #7c3aed 0%, #0ea5e9 55%, #22c55e 100%);
-  --grad2: linear-gradient(135deg, #7c3aed 0%, #0ea5e9 60%, #22c55e 100%);
-}
-
-body.dark header{
-  background: rgba(11,16,32,0.72);
-}
-
-body.dark .leaflet-control-attribution{
-  background: rgba(0,0,0,0.35) !important;
-  color: rgba(255,255,255,0.75) !important;
-  border: 1px solid rgba(255,255,255,0.10) !important;
-}
+/* Search dropdown */
 .search-results{
   position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 14px;
   box-shadow: var(--shadow);
-  margin-top: 6px;
-  width: calc(100% - 2px);
+  width: 100%;
   z-index: 999;
   overflow: hidden;
 }
@@ -328,6 +308,7 @@ body.dark .leaflet-control-attribution{
 .search-item:hover{
   background: rgba(124,58,237,0.12);
 }
+
 /* ===== Toast overlay ===== */
 .toast{
   position: fixed;
@@ -352,4 +333,25 @@ body.dark .leaflet-control-attribution{
   transform: translateX(-50%) translateY(-6px);
 }
 
+/* Dark theme */
+body.dark{
+  --bg: #0b1020;
+  --card: rgba(255,255,255,0.06);
+  --text: #e5e7eb;
+  --muted: rgba(229,231,235,0.70);
+  --border: rgba(255,255,255,0.10);
+  --shadow: 0 14px 30px rgba(0,0,0,0.35);
+  --shadow2: 0 8px 16px rgba(0,0,0,0.35);
+  --grad: linear-gradient(90deg, #7c3aed 0%, #0ea5e9 55%, #22c55e 100%);
+  --grad2: linear-gradient(135deg, #7c3aed 0%, #0ea5e9 60%, #22c55e 100%);
+}
 
+body.dark header{
+  background: rgba(11,16,32,0.72);
+}
+
+body.dark .leaflet-control-attribution{
+  background: rgba(0,0,0,0.35) !important;
+  color: rgba(255,255,255,0.75) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+}
