@@ -90,20 +90,25 @@ h1{
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-right: 8px; /* creates breathing room before next control */
 }
+
 
 .radius input[type="range"]{
   width: 160px;
 }
 
 .radius-val{
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 750;
-  min-width: 56px;
+  min-width: 64px;   /* prevents “1.4 km” from pushing layout around */
   text-align: right;
 }
 
+.nearby-wrap{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
 .search{
   position: relative;
@@ -424,14 +429,13 @@ body.g3{
   --grad: linear-gradient(90deg, #ef4444 0%, #db2777 55%, #5b21b6 100%);
   --grad2: linear-gradient(135deg, #ef4444 0%, #db2777 55%, #5b21b6 100%);
 }
-/* ===== Numbered stop badges on map ===== */
+/* Numbered stop badges */
 .stop-badge{
   background: transparent;
   border: none;
 }
 
 .stop-badge-inner{
-  --badge-ring: var(--grad); /* JS overrides ring with accent color */
   width: 26px;
   height: 26px;
   border-radius: 999px;
@@ -452,5 +456,6 @@ body.dark .stop-badge-inner{
   color: rgba(229,231,235,0.98);
   box-shadow: 0 10px 18px rgba(0,0,0,0.45);
 }
+
 
 

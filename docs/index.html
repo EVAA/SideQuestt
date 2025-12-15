@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 
-<body>
+<body class="g1">
   <header>
     <div class="header-inner">
       <div class="brand">
@@ -23,17 +23,20 @@
         <button class="ghost" id="clear-btn" type="button">Clear</button>
       </div>
 
+      <!-- Controls row -->
       <div class="controls">
         <button id="loc-btn" type="button">Use my location</button>
-        <div class="nearby-wrap">
-           <button id="nearby-btn" type="button">Recommend nearby</button>
-           <label class="radius">
-              <span class="switch-label">Radius</span>
-              <input id="radius-slider" type="range" min="300" max="5000" step="100" value="1400" />
-              <span id="radius-val" class="radius-val">1.4 km</span>
-            </label>
-        </div>
 
+        <!-- Recommend nearby + radius slider -->
+        <div class="nearby-wrap">
+          <button id="nearby-btn" type="button">Recommend nearby</button>
+
+          <label class="radius">
+            <span class="switch-label">Radius</span>
+            <input id="radius-slider" type="range" min="300" max="5000" step="100" value="1400" />
+            <span id="radius-val" class="radius-val">1.4 km</span>
+          </label>
+        </div>
 
         <button class="ghost" id="start-toggle" type="button" title="Toggle start mode">
           Start: POI[0]
@@ -49,32 +52,38 @@
         <button id="algo-ga" type="button" disabled>GA-lite</button>
       </div>
 
+      <!-- Search -->
       <div class="search">
         <input id="search-q" type="text" placeholder="Search & add a stop (e.g. 'Bar Raval', 'Pilot Coffee', 'CN Tower')" />
         <button id="search-add-btn" type="button">Add</button>
         <div id="search-results" class="search-results"></div>
       </div>
 
+      <!-- Toggles -->
       <div class="toggles">
         <div class="seg seg-2" role="group" aria-label="Place type">
           <button id="type-cafe" class="seg-btn" type="button">Cafés</button>
           <button id="type-night" class="seg-btn" type="button">Bars + Clubs</button>
         </div>
+
         <div class="toggle-row">
-           <label class="switch">
-              <input id="night-toggle" type="checkbox" />
-              <span class="slider"></span>
-              <span class="switch-label">Night mode</span>
-           </label>
-           <label class="grad-picker">
-              <span class="switch-label">Gradient</span>
-              <select id="grad-theme">
-                  <option value="g1" selected>Purple • Blue • Green</option>
-                  <option value="g2">Pink • Orange • Yellow</option>
+          <label class="switch">
+            <input id="night-toggle" type="checkbox" />
+            <span class="slider"></span>
+            <span class="switch-label">Night mode</span>
+          </label>
+
+          <label class="grad-picker">
+            <span class="switch-label">Gradient</span>
+            <select id="grad-theme">
+              <option value="g1" selected>Purple • Blue • Green</option>
+              <option value="g2">Pink • Orange • Yellow</option>
               <option value="g3">Red • Dark Pink • Dark Purple</option>
-              </select>
-            </label>
+            </select>
+          </label>
+        </div>
       </div>
+    </div>
   </header>
 
   <div id="map"></div>
@@ -87,9 +96,6 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=7"></script>
-
-
+  <script src="app.js?v=1"></script>
 </body>
 </html>
-

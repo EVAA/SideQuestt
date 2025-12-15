@@ -48,12 +48,14 @@ let routeBadgeLayer = L.layerGroup().addTo(map);
 
 let currPois = [];
 let routeLine = null;
+let routeAnimTimer = null;
 
 let lastOrder = null;
 let lastLabel = "";
 
 // ===== UI helpers =====
 function setOutHTML(html) { out.innerHTML = html; }
+
 function safe(s) {
   return String(s)
     .replaceAll("&", "&amp;")
@@ -61,6 +63,7 @@ function safe(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
+
 function renderMsg(msg) { setOutHTML(`<div class="out-title">${safe(msg)}</div>`); }
 
 function setOn(id, on) {
@@ -68,20 +71,24 @@ function setOn(id, on) {
   if (!el) return;
   el.classList.toggle("is-on", !!on);
 }
+
 function setAlgoActive(id) {
   ["algo-nn", "algo-2opt", "algo-sa", "algo-ga"].forEach(x => setOn(x, x === id));
 }
+
 function updateStartToggle() {
   const btn = document.getElementById("start-toggle");
   if (!btn) return;
   btn.textContent = (startMode === "poi0") ? "Start: POI[0]" : "Start: My Location";
 }
+
 function enableAlgos(ok) {
   ["algo-nn", "algo-2opt", "algo-sa", "algo-ga"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = !ok;
   });
 }
+
 function placeTypeLabel() {
   return (placeType === "night") ? "Bars + Clubs" : "Cafés";
 }
@@ -93,6 +100,17 @@ function showToast(msg = "Added to route") {
   el.classList.add("show");
   clearTimeout(showToast._t);
   showToast._t = setTimeout(() => el.classList.remove("show"), 900);
+}
+
+// ===== Walking time =====
+const WALK_KMPH = 4.5;
+function walkTimeStrFromKm(km) {
+  const mins = (km / WALK_KMPH) * 60;
+  if (!Number.isFinite(mins)) return "";
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins - 60 * h);
+  if (h <= 0) return `${m} min`;
+  return `${h} h ${m} min`;
 }
 
 // ===== Accent color (blue day, hot pink night) =====
@@ -110,6 +128,7 @@ function refreshMapStyles() {
   searchLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
 
   if (routeLine?.setStyle) routeLine.setStyle({ color: a.color });
+  if (userMarker?.setStyle) userMarker.setStyle({ color: a.color, fillColor: a.fillColor });
 
   if (lastOrder && lastOrder.length) drawRouteBadges(lastOrder);
 }
@@ -157,10 +176,12 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   const a = Math.sin(dp / 2) ** 2 + Math.cos(p1) * Math.cos(p2) * Math.sin(dl / 2) ** 2;
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
 function distPois(i, j) {
   const a = currPois[i], b = currPois[j];
   return haversineKm(a.lat, a.lon, b.lat, b.lon);
 }
+
 function distFromUserToIdx(i) {
   if (!userLatLon) return Infinity;
   return haversineKm(userLatLon.lat, userLatLon.lon, currPois[i].lat, currPois[i].lon);
@@ -322,7 +343,13 @@ function gaLite(bestOf = 40) {
 function clearRoute() {
   if (routeLine) map.removeLayer(routeLine);
   routeLine = null;
+
   routeBadgeLayer.clearLayers();
+
+  if (routeAnimTimer) {
+    clearInterval(routeAnimTimer);
+    routeAnimTimer = null;
+  }
 }
 
 function plotPois() {
@@ -360,26 +387,49 @@ function drawRoute(order) {
   }
 
   if (routeLine) map.removeLayer(routeLine);
+  routeLine = null;
+
+  if (routeAnimTimer) {
+    clearInterval(routeAnimTimer);
+    routeAnimTimer = null;
+  }
 
   const a = accentStyle();
-  routeLine = L.polyline(pts, {
+
+  routeLine = L.polyline([pts[0]], {
     weight: 7,
     opacity: 0.95,
     lineJoin: "round",
     color: a.color
   }).addTo(map);
 
+  let i = 1;
+  routeAnimTimer = setInterval(() => {
+    if (!routeLine) {
+      clearInterval(routeAnimTimer);
+      routeAnimTimer = null;
+      return;
+    }
+    routeLine.addLatLng(pts[i]);
+    i += 1;
+    if (i >= pts.length) {
+      clearInterval(routeAnimTimer);
+      routeAnimTimer = null;
+    }
+  }, 18);
+
   drawRouteBadges(order);
 }
 
 function renderRoute(order, label) {
   const km = routeLengthKm(order);
+  const walkStr = walkTimeStrFromKm(km);
   const startLabel = (startMode === "user" && userLatLon) ? "My Location" : "POI[0]";
 
   const items = [];
 
-  // If start is user, show it as first bubble
   if (startMode === "user" && userLatLon) {
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${userLatLon.lat},${userLatLon.lon}`;
     items.push(`
       <li class="bubble">
         <div class="num">1</div>
@@ -387,7 +437,9 @@ function renderRoute(order, label) {
           <div class="name">You</div>
           <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
         </div>
-        <div class="row-actions"></div>
+        <div class="row-actions">
+          <a class="pill" href="${mapsUrl}" target="_blank" rel="noopener">Open in Maps</a>
+        </div>
       </li>
     `);
   }
@@ -395,6 +447,7 @@ function renderRoute(order, label) {
   order.forEach((idx, k) => {
     const p = currPois[idx];
     const num = (startMode === "user" && userLatLon) ? (k + 2) : (k + 1);
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`;
 
     items.push(`
       <li class="bubble">
@@ -404,13 +457,13 @@ function renderRoute(order, label) {
           <div class="hint">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>
         </div>
         <div class="row-actions">
+          <a class="pill" href="${mapsUrl}" target="_blank" rel="noopener">Open in Maps</a>
           <button class="pill" data-del="${idx}" type="button">Remove</button>
         </div>
       </li>
     `);
   });
 
-  // If loop mode, show return-to-start as final bubble
   if (loopMode && order.length) {
     if (startMode === "user" && userLatLon) {
       items.push(`
@@ -445,6 +498,7 @@ function renderRoute(order, label) {
         <div class="chip">Mode: ${safe(placeTypeLabel())}</div>
         <div class="chip">Start: ${safe(startLabel)}</div>
         <div class="chip">Distance: ${km.toFixed(2)} km</div>
+        <div class="chip">Walk: ${safe(walkStr)}</div>
         <div class="chip">Stops: ${(startMode === "user" && userLatLon) ? (order.length + 1) : order.length}</div>
       </div>
     </div>
@@ -491,9 +545,7 @@ async function nominatimAutocomplete(q) {
 
 // ===== Overpass recommend nearby =====
 function overpassAmenityFilter() {
-  if (placeType === "night") {
-    return `["amenity"~"bar|pub|nightclub"]`;
-  }
+  if (placeType === "night") return `["amenity"~"bar|pub|nightclub"]`;
   return `["amenity"="cafe"]`;
 }
 
@@ -522,7 +574,6 @@ function scoreReco(el) {
   return named * 100 + tagCount;
 }
 
-// Recommendation markers: show popup with name + button
 function addRecoMarker(p) {
   const lat = p.lat;
   const lon = p.lon;
@@ -638,7 +689,7 @@ function bindUI() {
   enableAlgos(false);
   updateStartToggle();
 
-  // ---- Loop toggle ----
+  // Loop toggle
   function updateLoopToggle() {
     const b = document.getElementById("loop-toggle");
     if (!b) return;
@@ -660,7 +711,7 @@ function bindUI() {
     renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
   });
 
-  // ---- Start mode toggle ----
+  // Start mode toggle
   document.getElementById("start-toggle")?.addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
     updateStartToggle();
@@ -677,7 +728,7 @@ function bindUI() {
     );
   });
 
-  // ---- Night mode (dark UI + basemap) ----
+  // Night mode
   document.getElementById("night-toggle")?.addEventListener("change", (e) => {
     const on = !!e.target.checked;
     document.body.classList.toggle("dark", on);
@@ -685,7 +736,7 @@ function bindUI() {
     refreshMapStyles();
   });
 
-  // ---- Gradient theme picker (optional; safe if element missing) ----
+  // Gradient picker (safe if missing CSS)
   function applyGradTheme(val) {
     document.body.classList.remove("g1", "g2", "g3");
     document.body.classList.add(val);
@@ -702,7 +753,7 @@ function bindUI() {
   }
   gradSel?.addEventListener("change", (e) => applyGradTheme(e.target.value));
 
-  // ---- Place type buttons ----
+  // Place type
   function setType(t) {
     placeType = t;
     setOn("type-cafe", t === "cafe");
@@ -713,7 +764,7 @@ function bindUI() {
   document.getElementById("type-night")?.addEventListener("click", () => setType("night"));
   setType("cafe");
 
-  // ---- Use my location ----
+  // Use my location
   document.getElementById("loc-btn")?.addEventListener("click", () => {
     if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
 
@@ -742,7 +793,7 @@ function bindUI() {
     );
   });
 
-  // ---- Radius slider (debounced auto refresh) ----
+  // Radius slider (debounced auto refresh)
   const rEl = document.getElementById("radius-slider");
   const rValEl = document.getElementById("radius-val");
 
@@ -761,16 +812,15 @@ function bindUI() {
 
     clearTimeout(nearbyDebounce);
     nearbyDebounce = setTimeout(() => {
-      // only refresh if we already have a location or POI[0] anchor
       const anchor = getAnchorLatLonForRecommendations();
       if (anchor) recommendNearby();
     }, 500);
   });
 
-  // ---- Recommend nearby button ----
+  // Recommend nearby button
   document.getElementById("nearby-btn")?.addEventListener("click", recommendNearby);
 
-  // ---- Clear ----
+  // Clear
   document.getElementById("clear-btn")?.addEventListener("click", () => {
     currPois = [];
     plotPois();
@@ -783,7 +833,7 @@ function bindUI() {
     renderMsg("Cleared. Add stops or tap “Recommend nearby”.");
   });
 
-  // ---- Search + autocomplete ----
+  // Search + autocomplete
   const qEl = document.getElementById("search-q");
   const resultsEl = document.getElementById("search-results");
 
@@ -842,7 +892,7 @@ function bindUI() {
     if (e.key === "Enter") document.getElementById("search-add-btn")?.click();
   });
 
-  // ---- Algorithms ----
+  // Algorithms
   document.getElementById("algo-nn")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
     setAlgoActive("algo-nn");
