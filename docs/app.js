@@ -344,17 +344,22 @@ function plotPois() {
   poiLayer.clearLayers();
   clearRoute();
 
+  const a = accentStyle();
+
   currPois.forEach((p) => {
     L.circleMarker([p.lat, p.lon], {
       radius: 7,
       weight: 2,
       opacity: 0.9,
-      fillOpacity: 0.9
+      fillOpacity: 0.9,
+      color: a.color,
+      fillColor: a.fillColor
     }).addTo(poiLayer).bindPopup(safe(p.name));
   });
 
   enableAlgos(currPois.length >= 2);
 }
+
 
 function drawRoute(order) {
   if (!order.length) return;
@@ -495,22 +500,33 @@ function addRecoMarker(p) {
   const isNightUI = document.body.classList.contains("dark");
   const isNightPlaces = (placeType === "night");
 
-   // Different colors only when the UI is in night mode AND you're showing bars/clubs
+  const lat = p.lat;
+  const lon = p.lon;
+
+  // Bars/clubs markers get a distinct look ONLY when UI is in night mode
   const style = (isNightUI && isNightPlaces)
-  ? { color: "#ff4d9d", fillColor: "#ff1f7a" }   // bars/clubs in night mode (hot pink)
-  : { color: "#7c3aed", fillColor: "#0ea5e9" };  // default (purple/blue)
+    ? { color: "#ff4d9d", fillColor: "#ff1f7a" }   // night bars/clubs
+    : accentStyle();                               // otherwise follow global accent (blue/day, hot pink/night)
 
-  const a = accentStyle();
   const m = L.circleMarker([lat, lon], {
-  radius: 7,
-  weight: 2,
-  opacity: 0.95,
-  fillOpacity: 0.95,
-  color: a.color,
-  fillColor: a.fillColor
-}).addTo(recoLayer);
+    radius: 7,
+    weight: 2,
+    opacity: 0.95,
+    fillOpacity: 0.95,
+    color: style.color,
+    fillColor: style.fillColor
+  }).addTo(recoLayer);
 
+  // optional popup
+  m.bindPopup(safe(p.name || "Place"));
+
+  // click to add as stop
+  m.on("click", () => {
+    addPOI(p.name || "Place", lat, lon);
+    showToast("Added to route");
+  });
 }
+
 
 function scoreReco(el) {
   const tags = el.tags || {};
@@ -604,16 +620,16 @@ function bindUI() {
 
   
 // ---- Radius slider ----
-const rEl = document.getElementById("radius-slider");
-const rValEl = document.getElementById("radius-val");
+  const rEl = document.getElementById("radius-slider");
+  const rValEl = document.getElementById("radius-val");
 
-function setRadiusLabel(m) {
-  if (!rValEl) return;
-  rValEl.textContent = (m / 1000).toFixed(1) + " km";
-}
+  function setRadiusLabel(m) {
+    if (!rValEl) return;
+    rValEl.textContent = (m / 1000).toFixed(1) + " km";
+  }
 
-nearbyRadiusM = Number(rEl?.value) || 1400;
-setRadiusLabel(nearbyRadiusM);
+  nearbyRadiusM = Number(rEl?.value) || 1400;
+  setRadiusLabel(nearbyRadiusM);
 
 // debounce timer must live in bindUI scope
 let nearbyDebounce = null;
@@ -627,8 +643,6 @@ rEl?.addEventListener("input", (e) => {
     recommendNearby(); // runs after user stops moving slider
   }, 500);
 });
-
-}
 
 
   document.getElementById("loop-toggle")?.addEventListener("click", () => {
@@ -822,7 +836,7 @@ gradSel?.addEventListener("change", (e) => {
     renderRoute(order, lastLabel);
   });
 
-
+}
 window.addEventListener("DOMContentLoaded", () => {
   bindUI();
   renderMsg("Add stops or tap “Recommend nearby”.");
