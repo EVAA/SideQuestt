@@ -1,4 +1,5 @@
 console.log("app.js loaded");
+
 const out = document.getElementById("out");
 
 // Toronto bounding box (SW, NE)
@@ -9,7 +10,7 @@ const TORONTO_BOUNDS = {
   maxLon: -79.1169
 };
 
-// ===== Map (switchable basemap) =====
+// ===== Map =====
 const map = L.map("map").setView([43.6532, -79.3832], 13);
 
 let tileLayer = null;
@@ -31,28 +32,25 @@ function setBasemap(isDark) {
 }
 setBasemap(false);
 
-// Loop mode: true = return to start, false = end at last POI
+// ===== State =====
 let loopMode = true;
-let lastOrder = null;
-let lastLabel = "";
+let startMode = "poi0"; // "poi0" | "user"
+let placeType = "cafe"; // "cafe" | "night"
+let userLatLon = null;
+
 let nearbyRadiusM = 1400;
-let routeBadgeLayer = L.layerGroup().addTo(map);
 
-
-
-// ===== Layers / state =====
 let userMarker = null;
 let poiLayer = L.layerGroup().addTo(map);
 let recoLayer = L.layerGroup().addTo(map);
 let searchLayer = L.layerGroup().addTo(map);
+let routeBadgeLayer = L.layerGroup().addTo(map);
 
 let currPois = [];
 let routeLine = null;
 
-let startMode = "poi0"; // "poi0" | "user"
-let userLatLon = null;
-
-let placeType = "cafe"; // "cafe" | "night"
+let lastOrder = null;
+let lastLabel = "";
 
 // ===== UI helpers =====
 function setOutHTML(html) { out.innerHTML = html; }
@@ -63,88 +61,7 @@ function safe(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
-
-function drawRouteBadges(order) {
-  routeBadgeLayer.clearLayers();
-  if (!order || !order.length) return;
-
-  // Build the same sequence you show in the list:
-  // - If startMode=user: badge 1 is "You", then POIs start at 2
-  // - If startMode=poi0: POI[0] is badge 1, etc
-  const pts = [];
-
-  if (startMode === "user" && userLatLon) {
-    pts.push({ lat: userLatLon.lat, lon: userLatLon.lon, label: 1, name: "You" });
-    order.forEach((idx, k) => {
-      const p = currPois[idx];
-      pts.push({ lat: p.lat, lon: p.lon, label: k + 2, name: p.name });
-    });
-    // (Optional) we usually don’t add a badge for "return to you" to avoid duplicate badge at same spot
-  } else {
-    order.forEach((idx, k) => {
-      const p = currPois[idx];
-      pts.push({ lat: p.lat, lon: p.lon, label: k + 1, name: p.name });
-    });
-    // (Optional) also don’t badge the final return-to-start (same location)
-  }
-
-  const a = accentStyle();
-
-  pts.forEach((p) => {
-    const icon = L.divIcon({
-      className: "stop-badge",
-      html: `<div class="stop-badge-inner">${p.label}</div>`,
-      iconSize: [26, 26],
-      iconAnchor: [13, 13]
-    });
-
-    L.marker([p.lat, p.lon], { icon, zIndexOffset: 800 })
-      .addTo(routeBadgeLayer)
-      .bindTooltip(safe(p.name), { direction: "top", offset: [0, -10], opacity: 0.95 });
-
-    // colorize badge ring based on accent
-    // (we set CSS variable per marker using element style after add)
-  });
-
-  // Apply accent ring color to all badges
-  // (Leaflet creates DOM nodes async-ish, so do it after a tick)
-  setTimeout(() => {
-    document.querySelectorAll(".stop-badge-inner").forEach(el => {
-      el.style.setProperty("--badge-ring", a.color);
-    });
-  }, 0);
-}
-
 function renderMsg(msg) { setOutHTML(`<div class="out-title">${safe(msg)}</div>`); }
-
-function accentStyle() {
-  const isNight = document.body.classList.contains("dark");
-  if (isNight) {
-    return { color: "#ff1f7a", fillColor: "#ff1f7a" }; // hot pink
-  }
-  return { color: "#0ea5e9", fillColor: "#0ea5e9" };   // blue (day)
-}
-
-function refreshMapStyles() {
-  const a = accentStyle();
-
-  poiLayer.eachLayer(l => {
-    if (l && l.setStyle) l.setStyle({ ...a });
-  });
-
-  recoLayer.eachLayer(l => {
-    if (l && l.setStyle) l.setStyle({ ...a });
-  });
-
-  searchLayer.eachLayer(l => {
-    if (l && l.setStyle) l.setStyle({ ...a });
-  });
-
-  if (routeLine && routeLine.setStyle) {
-    routeLine.setStyle({ color: a.color });
-  }
-}
-
 
 function setOn(id, on) {
   const el = document.getElementById(id);
@@ -165,42 +82,8 @@ function enableAlgos(ok) {
     if (el) el.disabled = !ok;
   });
 }
-
 function placeTypeLabel() {
   return (placeType === "night") ? "Bars + Clubs" : "Cafés";
-}
-
-function overpassAmenityFilter() {
-  if (placeType === "night") {
-    // bar, pub, nightclub
-    return `["amenity"~"bar|pub|nightclub"]`;
-  }
-  return `["amenity"="cafe"]`;
-}
-
-function getAnchorLatLonForRecommendations() {
-  // If start mode is POI[0], recommend near POI[0] (if it exists)
-  if (startMode === "poi0" && currPois.length >= 1) {
-    return { lat: currPois[0].lat, lon: currPois[0].lon };
-  }
-  // Otherwise recommend near user location
-  return userLatLon;
-}
-
-async function nominatimAutocomplete(q) {
-  if (!userLatLon) return [];
-
-  const url =
-    `https://nominatim.openstreetmap.org/search?` +
-    `format=json&limit=5&addressdetails=1` +
-    `&viewbox=${TORONTO_BOUNDS.minLon},${TORONTO_BOUNDS.maxLat},${TORONTO_BOUNDS.maxLon},${TORONTO_BOUNDS.minLat}` +
-    `&bounded=1` +
-    `&lat=${userLatLon.lat}&lon=${userLatLon.lon}` +
-    `&q=${encodeURIComponent(q)}`;
-
-  const res = await fetch(url, { headers: { "Accept": "application/json" } });
-  if (!res.ok) return [];
-  return await res.json();
 }
 
 function showToast(msg = "Added to route") {
@@ -210,6 +93,59 @@ function showToast(msg = "Added to route") {
   el.classList.add("show");
   clearTimeout(showToast._t);
   showToast._t = setTimeout(() => el.classList.remove("show"), 900);
+}
+
+// ===== Accent color (blue day, hot pink night) =====
+function accentStyle() {
+  const isNight = document.body.classList.contains("dark");
+  if (isNight) return { color: "#ff1f7a", fillColor: "#ff1f7a" };
+  return { color: "#0ea5e9", fillColor: "#0ea5e9" };
+}
+
+function refreshMapStyles() {
+  const a = accentStyle();
+
+  poiLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
+  recoLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
+  searchLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
+
+  if (routeLine?.setStyle) routeLine.setStyle({ color: a.color });
+
+  if (lastOrder && lastOrder.length) drawRouteBadges(lastOrder);
+}
+
+// ===== Numbered route badges =====
+function drawRouteBadges(order) {
+  routeBadgeLayer.clearLayers();
+  if (!order || !order.length) return;
+
+  const seq = [];
+  if (startMode === "user" && userLatLon) {
+    seq.push({ lat: userLatLon.lat, lon: userLatLon.lon, n: 1 });
+    order.forEach((idx, k) => {
+      const p = currPois[idx];
+      seq.push({ lat: p.lat, lon: p.lon, n: k + 2 });
+    });
+  } else {
+    order.forEach((idx, k) => {
+      const p = currPois[idx];
+      seq.push({ lat: p.lat, lon: p.lon, n: k + 1 });
+    });
+  }
+
+  const a = accentStyle();
+
+  seq.forEach(s => {
+    const icon = L.divIcon({
+      className: "stop-badge",
+      html: `<div class="stop-badge-inner" style="--badge-ring:${a.color}">${s.n}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+
+    L.marker([s.lat, s.lon], { icon, interactive: false, zIndexOffset: 900 })
+      .addTo(routeBadgeLayer);
+  });
 }
 
 // ===== Distances =====
@@ -233,15 +169,10 @@ function distFromUserToIdx(i) {
 function routeLengthKm(order) {
   if (!order.length) return 0;
 
-  // Start = user
   if (startMode === "user" && userLatLon) {
     let tot = 0;
     tot += haversineKm(userLatLon.lat, userLatLon.lon, currPois[order[0]].lat, currPois[order[0]].lon);
-
-    for (let i = 0; i < order.length - 1; i++) {
-      tot += distPois(order[i], order[i + 1]);
-    }
-
+    for (let i = 0; i < order.length - 1; i++) tot += distPois(order[i], order[i + 1]);
     if (loopMode) {
       tot += haversineKm(
         userLatLon.lat, userLatLon.lon,
@@ -251,7 +182,6 @@ function routeLengthKm(order) {
     return tot;
   }
 
-  // Start = POI[0]
   let tot = 0;
   for (let i = 0; i < order.length - 1; i++) tot += distPois(order[i], order[i + 1]);
   if (loopMode) tot += distPois(order[order.length - 1], order[0]);
@@ -393,7 +323,6 @@ function clearRoute() {
   if (routeLine) map.removeLayer(routeLine);
   routeLine = null;
   routeBadgeLayer.clearLayers();
-
 }
 
 function plotPois() {
@@ -416,7 +345,6 @@ function plotPois() {
   enableAlgos(currPois.length >= 2);
 }
 
-
 function drawRoute(order) {
   if (!order.length) return;
 
@@ -432,16 +360,16 @@ function drawRoute(order) {
   }
 
   if (routeLine) map.removeLayer(routeLine);
+
   const a = accentStyle();
   routeLine = L.polyline(pts, {
-  weight: 7,
-  opacity: 0.95,
-  lineJoin: "round",
-  color: a.color
-}).addTo(map);
-drawRouteBadges(order);
+    weight: 7,
+    opacity: 0.95,
+    lineJoin: "round",
+    color: a.color
+  }).addTo(map);
 
-
+  drawRouteBadges(order);
 }
 
 function renderRoute(order, label) {
@@ -450,6 +378,7 @@ function renderRoute(order, label) {
 
   const items = [];
 
+  // If start is user, show it as first bubble
   if (startMode === "user" && userLatLon) {
     items.push(`
       <li class="bubble">
@@ -481,38 +410,37 @@ function renderRoute(order, label) {
     `);
   });
 
-  // If loop mode is ON, show returning to start as the final stop in the list
-if (loopMode && order.length) {
-  if (startMode === "user" && userLatLon) {
-    items.push(`
-      <li class="bubble">
-        <div class="num">${order.length + 2}</div>
-        <div>
-          <div class="name">Return to You</div>
-          <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
-        </div>
-        <div class="row-actions"></div>
-      </li>
-    `);
-  } else {
-    const p0 = currPois[order[0]];
-    items.push(`
-      <li class="bubble">
-        <div class="num">${order.length + 1}</div>
-        <div>
-          <div class="name">Return to ${safe(p0.name)}</div>
-          <div class="hint">${p0.lat.toFixed(4)}, ${p0.lon.toFixed(4)}</div>
-        </div>
-        <div class="row-actions"></div>
-      </li>
-    `);
+  // If loop mode, show return-to-start as final bubble
+  if (loopMode && order.length) {
+    if (startMode === "user" && userLatLon) {
+      items.push(`
+        <li class="bubble">
+          <div class="num">${order.length + 2}</div>
+          <div>
+            <div class="name">Return to You</div>
+            <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
+          </div>
+          <div class="row-actions"></div>
+        </li>
+      `);
+    } else {
+      const p0 = currPois[order[0]];
+      items.push(`
+        <li class="bubble">
+          <div class="num">${order.length + 1}</div>
+          <div>
+            <div class="name">Return to ${safe(p0.name)}</div>
+            <div class="hint">${p0.lat.toFixed(4)}, ${p0.lon.toFixed(4)}</div>
+          </div>
+          <div class="row-actions"></div>
+        </li>
+      `);
+    }
   }
-}
-
 
   setOutHTML(`
     <div class="route-header">
-      <div class="title">${safe(label)}</div>
+      <div class="title">${safe(label || "Route")}</div>
       <div class="meta">
         <div class="chip">Mode: ${safe(placeTypeLabel())}</div>
         <div class="chip">Start: ${safe(startLabel)}</div>
@@ -529,6 +457,8 @@ if (loopMode && order.length) {
       if (!Number.isFinite(idx)) return;
       currPois.splice(idx, 1);
       plotPois();
+      lastOrder = null;
+      lastLabel = "";
       renderMsg("Removed stop. Re-run an algorithm.");
       setAlgoActive("");
     });
@@ -542,7 +472,38 @@ function addPOI(name, lat, lon) {
   renderMsg(`Added: ${name}.`);
 }
 
+// ===== Search =====
+async function nominatimAutocomplete(q) {
+  if (!userLatLon) return [];
+
+  const url =
+    `https://nominatim.openstreetmap.org/search?` +
+    `format=json&limit=5&addressdetails=1` +
+    `&viewbox=${TORONTO_BOUNDS.minLon},${TORONTO_BOUNDS.maxLat},${TORONTO_BOUNDS.maxLon},${TORONTO_BOUNDS.minLat}` +
+    `&bounded=1` +
+    `&lat=${userLatLon.lat}&lon=${userLatLon.lon}` +
+    `&q=${encodeURIComponent(q)}`;
+
+  const res = await fetch(url, { headers: { "Accept": "application/json" } });
+  if (!res.ok) return [];
+  return await res.json();
+}
+
 // ===== Overpass recommend nearby =====
+function overpassAmenityFilter() {
+  if (placeType === "night") {
+    return `["amenity"~"bar|pub|nightclub"]`;
+  }
+  return `["amenity"="cafe"]`;
+}
+
+function getAnchorLatLonForRecommendations() {
+  if (startMode === "poi0" && currPois.length >= 1) {
+    return { lat: currPois[0].lat, lon: currPois[0].lon };
+  }
+  return userLatLon;
+}
+
 async function overpassQuery(query) {
   const url = "https://overpass-api.de/api/interpreter";
   const res = await fetch(url, {
@@ -554,12 +515,19 @@ async function overpassQuery(query) {
   return await res.json();
 }
 
+function scoreReco(el) {
+  const tags = el.tags || {};
+  const named = tags.name ? 1 : 0;
+  const tagCount = Object.keys(tags).length;
+  return named * 100 + tagCount;
+}
+
+// Recommendation markers: show popup with name + button
 function addRecoMarker(p) {
   const lat = p.lat;
   const lon = p.lon;
   const name = p.name || "Place";
 
-  // Accent color (hot pink in night mode, blue in day)
   const a = accentStyle();
 
   const m = L.circleMarker([lat, lon], {
@@ -571,24 +539,20 @@ function addRecoMarker(p) {
     fillColor: a.fillColor
   }).addTo(recoLayer);
 
-  // Create a unique id for the popup button
   const btnId = `addstop-${p._id}`;
 
-  // Show name + Add button (NOT auto-add on marker click)
   m.bindPopup(`
-    <div style="min-width: 180px">
-      <div style="font-weight: 800; margin-bottom: 6px;">${safe(name)}</div>
+    <div style="min-width: 200px">
+      <div style="font-weight: 850; margin-bottom: 8px;">${safe(name)}</div>
       <button id="${btnId}" type="button" style="padding:8px 10px; border-radius:12px; cursor:pointer;">
         Add to route
       </button>
     </div>
   `);
 
-  // When popup opens, wire the button click
   m.on("popupopen", () => {
     const btn = document.getElementById(btnId);
     if (!btn) return;
-
     btn.onclick = () => {
       addPOI(name, lat, lon);
       showToast("Added to route");
@@ -597,18 +561,11 @@ function addRecoMarker(p) {
   });
 }
 
-
-function scoreReco(el) {
-  const tags = el.tags || {};
-  const named = tags.name ? 1 : 0;
-  const tagCount = Object.keys(tags).length;
-  return named * 100 + tagCount;
-}
-
 async function recommendNearby() {
-  const radiusM = Number(document.getElementById("radius-slider")?.value) || nearbyRadiusM || 1400;
   const anchor = getAnchorLatLonForRecommendations();
   if (!anchor) return renderMsg("Tap “Use my location” or add a first stop (POI[0]) first.");
+
+  const radiusM = Number(document.getElementById("radius-slider")?.value) || nearbyRadiusM || 1400;
   const f = overpassAmenityFilter();
 
   renderMsg(`Finding nearby ${placeTypeLabel()}…`);
@@ -659,7 +616,7 @@ out center tags;
         <div class="meta">
           <div class="chip">Near: ${safe(anchorLabel)}</div>
           <div class="chip">Shown: ${top.length}</div>
-          <div class="chip">Radius: ${(radiusM/1000).toFixed(1)} km</div>
+          <div class="chip">Radius: ${(radiusM / 1000).toFixed(1)} km</div>
           <div class="chip">Tap marker → Add</div>
         </div>
       </div>
@@ -668,9 +625,11 @@ out center tags;
     const bounds = L.latLngBounds(top.map(p => [p.lat, p.lon]));
     map.fitBounds(bounds, { padding: [20, 20] });
 
+    refreshMapStyles();
+
   } catch (e) {
-  console.error(e);
-  renderMsg(`Nearby search failed: ${e?.message || "unknown error"}`);
+    console.error(e);
+    renderMsg(`Nearby search failed: ${e?.message || "unknown error"}`);
   }
 }
 
@@ -679,17 +638,111 @@ function bindUI() {
   enableAlgos(false);
   updateStartToggle();
 
+  // ---- Loop toggle ----
   function updateLoopToggle() {
     const b = document.getElementById("loop-toggle");
     if (!b) return;
     b.textContent = loopMode ? "Loop: ON" : "Loop: OFF";
     setOn("loop-toggle", loopMode);
   }
-
   updateLoopToggle();
 
-  
-// ---- Radius slider ----
+  document.getElementById("loop-toggle")?.addEventListener("click", () => {
+    loopMode = !loopMode;
+    updateLoopToggle();
+
+    if (lastOrder && lastOrder.length) {
+      drawRoute(lastOrder);
+      renderRoute(lastOrder, lastLabel);
+      return;
+    }
+
+    renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
+  });
+
+  // ---- Start mode toggle ----
+  document.getElementById("start-toggle")?.addEventListener("click", () => {
+    startMode = (startMode === "poi0") ? "user" : "poi0";
+    updateStartToggle();
+
+    if (lastOrder && lastOrder.length) {
+      drawRoute(lastOrder);
+      renderRoute(lastOrder, lastLabel);
+      return;
+    }
+
+    renderMsg(startMode === "user"
+      ? "Start set to My Location (tap 'Use my location' to update it)."
+      : "Start set to POI[0]."
+    );
+  });
+
+  // ---- Night mode (dark UI + basemap) ----
+  document.getElementById("night-toggle")?.addEventListener("change", (e) => {
+    const on = !!e.target.checked;
+    document.body.classList.toggle("dark", on);
+    setBasemap(on);
+    refreshMapStyles();
+  });
+
+  // ---- Gradient theme picker (optional; safe if element missing) ----
+  function applyGradTheme(val) {
+    document.body.classList.remove("g1", "g2", "g3");
+    document.body.classList.add(val);
+    try { localStorage.setItem("gradTheme", val); } catch {}
+  }
+  const gradSel = document.getElementById("grad-theme");
+  const savedGrad = (() => { try { return localStorage.getItem("gradTheme"); } catch { return null; } })();
+
+  if (savedGrad && ["g1", "g2", "g3"].includes(savedGrad)) {
+    if (gradSel) gradSel.value = savedGrad;
+    applyGradTheme(savedGrad);
+  } else {
+    applyGradTheme("g1");
+  }
+  gradSel?.addEventListener("change", (e) => applyGradTheme(e.target.value));
+
+  // ---- Place type buttons ----
+  function setType(t) {
+    placeType = t;
+    setOn("type-cafe", t === "cafe");
+    setOn("type-night", t === "night");
+    renderMsg(`Mode: ${placeTypeLabel()}. Tap “Recommend nearby”.`);
+  }
+  document.getElementById("type-cafe")?.addEventListener("click", () => setType("cafe"));
+  document.getElementById("type-night")?.addEventListener("click", () => setType("night"));
+  setType("cafe");
+
+  // ---- Use my location ----
+  document.getElementById("loc-btn")?.addEventListener("click", () => {
+    if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        userLatLon = { lat, lon };
+
+        if (userMarker) map.removeLayer(userMarker);
+
+        const a = accentStyle();
+        userMarker = L.circleMarker([lat, lon], {
+          radius: 9,
+          weight: 3,
+          opacity: 1,
+          fillOpacity: 1,
+          color: a.color,
+          fillColor: a.fillColor
+        }).addTo(map).bindPopup("You").openPopup();
+
+        map.setView([lat, lon], 15);
+        renderMsg(`Location set: ${lat.toFixed(5)}, ${lon.toFixed(5)}.`);
+      },
+      (err) => renderMsg(`Location error: ${err.message}`)
+    );
+  });
+
+  // ---- Radius slider (debounced auto refresh) ----
   const rEl = document.getElementById("radius-slider");
   const rValEl = document.getElementById("radius-val");
 
@@ -701,107 +754,23 @@ function bindUI() {
   nearbyRadiusM = Number(rEl?.value) || 1400;
   setRadiusLabel(nearbyRadiusM);
 
-// debounce timer must live in bindUI scope
-let nearbyDebounce = null;
+  let nearbyDebounce = null;
+  rEl?.addEventListener("input", (e) => {
+    nearbyRadiusM = Number(e.target.value) || 1400;
+    setRadiusLabel(nearbyRadiusM);
 
-rEl?.addEventListener("input", (e) => {
-  nearbyRadiusM = Number(e.target.value) || 1400;
-  setRadiusLabel(nearbyRadiusM);
-
-  clearTimeout(nearbyDebounce);
-  nearbyDebounce = setTimeout(() => {
-    recommendNearby(); // runs after user stops moving slider
-  }, 500);
-});
-
-
-  document.getElementById("loop-toggle")?.addEventListener("click", () => {
-  loopMode = !loopMode;
-  updateLoopToggle();
-
-  // If we already have a route displayed, refresh the map + list
-  if (lastOrder && lastOrder.length) {
-    drawRoute(lastOrder);
-    renderRoute(lastOrder, lastLabel);
-    return;
-  }
-
-  renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
-});
-
-
-  document.getElementById("start-toggle")?.addEventListener("click", () => {
-    startMode = (startMode === "poi0") ? "user" : "poi0";
-    updateStartToggle();
-    renderMsg(startMode === "user"
-      ? "Start set to My Location (tap 'Use my location' to update it)."
-      : "Start set to POI[0]."
-    );
+    clearTimeout(nearbyDebounce);
+    nearbyDebounce = setTimeout(() => {
+      // only refresh if we already have a location or POI[0] anchor
+      const anchor = getAnchorLatLonForRecommendations();
+      if (anchor) recommendNearby();
+    }, 500);
   });
 
-  document.getElementById("night-toggle")?.addEventListener("change", (e) => {
-    const on = !!e.target.checked;
-    document.body.classList.toggle("dark", on);
-    setBasemap(on);
-    refreshMapStyles();
-    if (lastOrder && lastOrder.length) drawRouteBadges(lastOrder);
-  });
-
-  // ---- Gradient theme picker ----
-function applyGradTheme(val) {
-  document.body.classList.remove("g1", "g2", "g3");
-  document.body.classList.add(val);
-  try { localStorage.setItem("gradTheme", val); } catch {}
-}
-
-const gradSel = document.getElementById("grad-theme");
-const savedGrad = (() => { try { return localStorage.getItem("gradTheme"); } catch { return null; } })();
-
-if (savedGrad && ["g1","g2","g3"].includes(savedGrad)) {
-  if (gradSel) gradSel.value = savedGrad;
-  applyGradTheme(savedGrad);
-} else {
-  applyGradTheme("g1"); // default
-}
-
-gradSel?.addEventListener("change", (e) => {
-  applyGradTheme(e.target.value);
-});
-
-
-  function setType(t) {
-    placeType = t;
-    setOn("type-cafe", t === "cafe");
-    setOn("type-night", t === "night");
-    renderMsg(`Mode: ${placeTypeLabel()}. Tap “Recommend nearby”.`);
-  }
-  document.getElementById("type-cafe")?.addEventListener("click", () => setType("cafe"));
-  document.getElementById("type-night")?.addEventListener("click", () => setType("night"));
-  placeType = "cafe";
-
-  document.getElementById("loc-btn")?.addEventListener("click", () => {
-    if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
-
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lon = pos.coords.longitude;
-        userLatLon = { lat, lon };
-
-        if (userMarker) map.removeLayer(userMarker);
-        userMarker = L.circleMarker([lat, lon], {
-          radius: 9, weight: 3, opacity: 1, fillOpacity: 1
-        }).addTo(map).bindPopup("You").openPopup();
-
-        map.setView([lat, lon], 15);
-        renderMsg(`Location set: ${lat.toFixed(5)}, ${lon.toFixed(5)}.`);
-      },
-      (err) => renderMsg(`Location error: ${err.message}`)
-    );
-  });
-
+  // ---- Recommend nearby button ----
   document.getElementById("nearby-btn")?.addEventListener("click", recommendNearby);
 
+  // ---- Clear ----
   document.getElementById("clear-btn")?.addEventListener("click", () => {
     currPois = [];
     plotPois();
@@ -814,7 +783,7 @@ gradSel?.addEventListener("change", (e) => {
     renderMsg("Cleared. Add stops or tap “Recommend nearby”.");
   });
 
-  // search + autocomplete
+  // ---- Search + autocomplete ----
   const qEl = document.getElementById("search-q");
   const resultsEl = document.getElementById("search-results");
 
@@ -873,11 +842,13 @@ gradSel?.addEventListener("change", (e) => {
     if (e.key === "Enter") document.getElementById("search-add-btn")?.click();
   });
 
-  // algos
+  // ---- Algorithms ----
   document.getElementById("algo-nn")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
     setAlgoActive("algo-nn");
     const order = getBaseOrder();
+    lastOrder = order.slice();
+    lastLabel = "Route (NN)";
     drawRoute(order);
     renderRoute(order, lastLabel);
   });
@@ -886,6 +857,8 @@ gradSel?.addEventListener("change", (e) => {
     if (currPois.length < 2) return;
     setAlgoActive("algo-2opt");
     const order = twoOpt(getBaseOrder().slice());
+    lastOrder = order.slice();
+    lastLabel = "Route (NN + 2-opt)";
     drawRoute(order);
     renderRoute(order, lastLabel);
   });
@@ -895,6 +868,8 @@ gradSel?.addEventListener("change", (e) => {
     setAlgoActive("algo-sa");
     const base = twoOpt(getBaseOrder().slice());
     const order = saOrder(base, 2500);
+    lastOrder = order.slice();
+    lastLabel = "Route (SA)";
     drawRoute(order);
     renderRoute(order, lastLabel);
   });
@@ -903,11 +878,13 @@ gradSel?.addEventListener("change", (e) => {
     if (currPois.length < 2) return;
     setAlgoActive("algo-ga");
     const order = gaLite(40);
+    lastOrder = order.slice();
+    lastLabel = "Route (GA-lite)";
     drawRoute(order);
     renderRoute(order, lastLabel);
   });
-
 }
+
 window.addEventListener("DOMContentLoaded", () => {
   bindUI();
   renderMsg("Add stops or tap “Recommend nearby”.");
