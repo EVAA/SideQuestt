@@ -821,7 +821,7 @@ gradSel?.addEventListener("change", (e) => {
     drawRoute(order);
     renderRoute(order, lastLabel);
   });
-}
+
 
 window.addEventListener("DOMContentLoaded", () => {
   bindUI();
