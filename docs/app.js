@@ -583,8 +583,8 @@ out center tags;
     map.fitBounds(bounds, { padding: [20, 20] });
 
   } catch (e) {
-    console.error(e);
-    renderMsg("Nearby search failed. Try again.");
+  console.error(e);
+  renderMsg(`Nearby search failed: ${e?.message || "unknown error"}`);
   }
 }
 
@@ -602,7 +602,8 @@ function bindUI() {
 
   updateLoopToggle();
 
-  // ---- Radius slider ----
+  
+// ---- Radius slider ----
 const rEl = document.getElementById("radius-slider");
 const rValEl = document.getElementById("radius-val");
 
@@ -611,14 +612,22 @@ function setRadiusLabel(m) {
   rValEl.textContent = (m / 1000).toFixed(1) + " km";
 }
 
-if (rEl) {
-  nearbyRadiusM = Number(rEl.value) || 1400;
+nearbyRadiusM = Number(rEl?.value) || 1400;
+setRadiusLabel(nearbyRadiusM);
+
+// debounce timer must live in bindUI scope
+let nearbyDebounce = null;
+
+rEl?.addEventListener("input", (e) => {
+  nearbyRadiusM = Number(e.target.value) || 1400;
   setRadiusLabel(nearbyRadiusM);
 
-  rEl.addEventListener("input", (e) => {
-    nearbyRadiusM = Number(e.target.value) || 1400;
-    setRadiusLabel(nearbyRadiusM);
-  });
+  clearTimeout(nearbyDebounce);
+  nearbyDebounce = setTimeout(() => {
+    recommendNearby(); // runs after user stops moving slider
+  }, 500);
+});
+
 }
 
 
