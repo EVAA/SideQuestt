@@ -36,6 +36,8 @@ let loopMode = true;
 let lastOrder = null;
 let lastLabel = "";
 let nearbyRadiusM = 1400;
+let routeBadgeLayer = L.layerGroup().addTo(map);
+
 
 
 // ===== Layers / state =====
@@ -61,6 +63,58 @@ function safe(s) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 }
+
+function drawRouteBadges(order) {
+  routeBadgeLayer.clearLayers();
+  if (!order || !order.length) return;
+
+  // Build the same sequence you show in the list:
+  // - If startMode=user: badge 1 is "You", then POIs start at 2
+  // - If startMode=poi0: POI[0] is badge 1, etc
+  const pts = [];
+
+  if (startMode === "user" && userLatLon) {
+    pts.push({ lat: userLatLon.lat, lon: userLatLon.lon, label: 1, name: "You" });
+    order.forEach((idx, k) => {
+      const p = currPois[idx];
+      pts.push({ lat: p.lat, lon: p.lon, label: k + 2, name: p.name });
+    });
+    // (Optional) we usually don’t add a badge for "return to you" to avoid duplicate badge at same spot
+  } else {
+    order.forEach((idx, k) => {
+      const p = currPois[idx];
+      pts.push({ lat: p.lat, lon: p.lon, label: k + 1, name: p.name });
+    });
+    // (Optional) also don’t badge the final return-to-start (same location)
+  }
+
+  const a = accentStyle();
+
+  pts.forEach((p) => {
+    const icon = L.divIcon({
+      className: "stop-badge",
+      html: `<div class="stop-badge-inner">${p.label}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+
+    L.marker([p.lat, p.lon], { icon, zIndexOffset: 800 })
+      .addTo(routeBadgeLayer)
+      .bindTooltip(safe(p.name), { direction: "top", offset: [0, -10], opacity: 0.95 });
+
+    // colorize badge ring based on accent
+    // (we set CSS variable per marker using element style after add)
+  });
+
+  // Apply accent ring color to all badges
+  // (Leaflet creates DOM nodes async-ish, so do it after a tick)
+  setTimeout(() => {
+    document.querySelectorAll(".stop-badge-inner").forEach(el => {
+      el.style.setProperty("--badge-ring", a.color);
+    });
+  }, 0);
+}
+
 function renderMsg(msg) { setOutHTML(`<div class="out-title">${safe(msg)}</div>`); }
 
 function accentStyle() {
@@ -338,6 +392,8 @@ function gaLite(bestOf = 40) {
 function clearRoute() {
   if (routeLine) map.removeLayer(routeLine);
   routeLine = null;
+  routeBadgeLayer.clearLayers();
+
 }
 
 function plotPois() {
@@ -383,6 +439,8 @@ function drawRoute(order) {
   lineJoin: "round",
   color: a.color
 }).addTo(map);
+drawRouteBadges(order);
+
 
 }
 
@@ -686,6 +744,7 @@ rEl?.addEventListener("input", (e) => {
     document.body.classList.toggle("dark", on);
     setBasemap(on);
     refreshMapStyles();
+    if (lastOrder && lastOrder.length) drawRouteBadges(lastOrder);
   });
 
   // ---- Gradient theme picker ----
