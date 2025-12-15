@@ -497,33 +497,45 @@ async function overpassQuery(query) {
 }
 
 function addRecoMarker(p) {
-  const isNightUI = document.body.classList.contains("dark");
-  const isNightPlaces = (placeType === "night");
-
   const lat = p.lat;
   const lon = p.lon;
+  const name = p.name || "Place";
 
-  // Bars/clubs markers get a distinct look ONLY when UI is in night mode
-  const style = (isNightUI && isNightPlaces)
-    ? { color: "#ff4d9d", fillColor: "#ff1f7a" }   // night bars/clubs
-    : accentStyle();                               // otherwise follow global accent (blue/day, hot pink/night)
+  // Accent color (hot pink in night mode, blue in day)
+  const a = accentStyle();
 
   const m = L.circleMarker([lat, lon], {
     radius: 7,
     weight: 2,
     opacity: 0.95,
     fillOpacity: 0.95,
-    color: style.color,
-    fillColor: style.fillColor
+    color: a.color,
+    fillColor: a.fillColor
   }).addTo(recoLayer);
 
-  // optional popup
-  m.bindPopup(safe(p.name || "Place"));
+  // Create a unique id for the popup button
+  const btnId = `addstop-${p._id}`;
 
-  // click to add as stop
-  m.on("click", () => {
-    addPOI(p.name || "Place", lat, lon);
-    showToast("Added to route");
+  // Show name + Add button (NOT auto-add on marker click)
+  m.bindPopup(`
+    <div style="min-width: 180px">
+      <div style="font-weight: 800; margin-bottom: 6px;">${safe(name)}</div>
+      <button id="${btnId}" type="button" style="padding:8px 10px; border-radius:12px; cursor:pointer;">
+        Add to route
+      </button>
+    </div>
+  `);
+
+  // When popup opens, wire the button click
+  m.on("popupopen", () => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+
+    btn.onclick = () => {
+      addPOI(name, lat, lon);
+      showToast("Added to route");
+      map.closePopup();
+    };
   });
 }
 
