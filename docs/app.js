@@ -428,6 +428,31 @@ function renderRoute(order, label) {
 
   const items = [];
 
+  function gmapsDirUrl(a, b) {
+  // a, b are {lat, lon}
+  return `https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lon}&destination=${b.lat},${b.lon}&travelmode=walking`;
+}
+
+if (startMode === "user" && userLatLon) {
+  const a = { lat: userLatLon.lat, lon: userLatLon.lon };
+  const b = order.length ? { lat: currPois[order[0]].lat, lon: currPois[order[0]].lon } : null;
+  const legUrl = b ? gmapsDirUrl(a, b) : null;
+
+  items.push(`
+    <li class="bubble">
+      <div class="num">1</div>
+      <div>
+        <div class="name">You</div>
+        <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
+      </div>
+      <div class="row-actions">
+        ${legUrl ? `<a class="pill" href="${legUrl}" target="_blank" rel="noopener">1 → 2</a>` : ""}
+      </div>
+    </li>
+  `);
+}
+
+
   if (startMode === "user" && userLatLon) {
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${userLatLon.lat},${userLatLon.lon}`;
     items.push(`
@@ -445,24 +470,57 @@ function renderRoute(order, label) {
   }
 
   order.forEach((idx, k) => {
-    const p = currPois[idx];
-    const num = (startMode === "user" && userLatLon) ? (k + 2) : (k + 1);
-    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`;
+  const p = currPois[idx];
 
-    items.push(`
-      <li class="bubble">
-        <div class="num">${num}</div>
-        <div>
-          <div class="name">${safe(p.name)}</div>
-          <div class="hint">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>
-        </div>
-        <div class="row-actions">
-          <a class="pill" href="${mapsUrl}" target="_blank" rel="noopener">Open in Maps</a>
-          <button class="pill" data-del="${idx}" type="button">Remove</button>
-        </div>
-      </li>
-    `);
-  });
+  const num = (startMode === "user" && userLatLon) ? (k + 2) : (k + 1);
+
+  // Current stop coordinate
+  const a = { lat: p.lat, lon: p.lon };
+
+  // Next stop coordinate (or loop back to start if loopMode)
+  let b = null;
+
+  if (k < order.length - 1) {
+    const nxt = currPois[order[k + 1]];
+    b = { lat: nxt.lat, lon: nxt.lon };
+  } else if (loopMode) {
+    if (startMode === "user" && userLatLon) b = { lat: userLatLon.lat, lon: userLatLon.lon };
+    else {
+      const first = currPois[order[0]];
+      b = { lat: first.lat, lon: first.lon };
+    }
+  }
+
+  const legUrl = b ? gmapsDirUrl(a, b) : null;
+
+  // Leg label: e.g. "2 → 3", and on the last one with loop: "N → 1"
+  let legLabel = "";
+  if (b) {
+    const fromN = num;
+    const toN =
+      (k < order.length - 1)
+        ? (num + 1)
+        : (loopMode
+            ? ((startMode === "user" && userLatLon) ? 1 : 1)
+            : "");
+    legLabel = (toN !== "") ? `${fromN} → ${toN}` : "";
+  }
+
+  items.push(`
+    <li class="bubble">
+      <div class="num">${num}</div>
+      <div>
+        <div class="name">${safe(p.name)}</div>
+        <div class="hint">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>
+      </div>
+      <div class="row-actions">
+        ${legUrl ? `<a class="pill" href="${legUrl}" target="_blank" rel="noopener">${safe(legLabel || "Directions")}</a>` : ""}
+        <button class="pill" data-del="${idx}" type="button">Remove</button>
+      </div>
+    </li>
+  `);
+});
+
 
   if (loopMode && order.length) {
     if (startMode === "user" && userLatLon) {
