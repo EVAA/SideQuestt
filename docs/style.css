@@ -78,19 +78,32 @@ h1{
   gap: 10px;
 }
 
-
-.nearby-wrap{
-  display: flex;
+.controls button,
+.controls .ghost {
+  height: 44px;
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  justify-content: center;
+}
+.radius input[type="range"] {
+  position: relative;
+  top: 1px;
 }
 
-.radius{
+
+
+.nearby-wrap {
+  display: flex;
+  align-items: center;   /* 🔑 vertical alignment fix */
+  gap: 14px;
+}
+
+
+.radius {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-right: 8px; /* creates breathing room before next control */
+  margin-top: 0;         /* remove downward drift */
 }
 
 
@@ -98,10 +111,12 @@ h1{
   width: 160px;
 }
 
-.radius-val{
-  min-width: 64px;   /* prevents “1.4 km” from pushing layout around */
+.radius-val {
+  min-width: 64px;       /* 🔑 spacing fix */
   text-align: right;
+  font-weight: 600;
 }
+
 
 .nearby-wrap{
   display: flex;
