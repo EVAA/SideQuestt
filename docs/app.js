@@ -64,6 +64,34 @@ function safe(s) {
     .replaceAll('"', "&quot;");
 }
 
+function hasNearbyAnchor() {
+  return !!getAnchorLatLonForRecommendations();
+}
+
+function setRangeFill(el) {
+  if (!el) return;
+  const min = Number(el.min) || 0;
+  const max = Number(el.max) || 100;
+  const val = Number(el.value) || min;
+  const pct = ((val - min) / Math.max(1, (max - min))) * 100;
+  el.style.setProperty("--range-pct", `${pct.toFixed(1)}%`);
+}
+
+function updateRadiusUI() {
+  const chip = document.getElementById("radius-chip");
+  const chipBtn = document.getElementById("radius-chip-btn");
+  const slider = document.getElementById("radius-slider");
+
+  const ok = hasNearbyAnchor();
+
+  chip?.classList.toggle("is-disabled", !ok);
+  chipBtn && (chipBtn.disabled = !ok);
+
+  // keep fill synced
+  setRangeFill(slider);
+}
+
+
 function renderMsg(msg) { setOutHTML(`<div class="out-title">${safe(msg)}</div>`); }
 
 function setOn(id, on) {
@@ -122,6 +150,8 @@ function accentStyle() {
 
 function refreshMapStyles() {
   const a = accentStyle();
+  setRangeFill(document.getElementById("radius-slider"));
+
 
   poiLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
   recoLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
@@ -580,6 +610,7 @@ if (startMode === "user" && userLatLon) {
 function addPOI(name, lat, lon) {
   currPois.push({ name, lat, lon });
   plotPois();
+  updateRadiusUI();
   map.setView([lat, lon], 15);
   renderMsg(`Added: ${name}.`);
 }
@@ -773,6 +804,8 @@ function bindUI() {
   document.getElementById("start-toggle")?.addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
     updateStartToggle();
+    updateRadiusUI();
+
 
     if (lastOrder && lastOrder.length) {
       drawRoute(lastOrder);
@@ -796,20 +829,28 @@ function bindUI() {
 
   // Gradient picker (safe if missing CSS)
   function applyGradTheme(val) {
-    document.body.classList.remove("g1", "g2", "g3");
-    document.body.classList.add(val);
-    try { localStorage.setItem("gradTheme", val); } catch {}
-  }
-  const gradSel = document.getElementById("grad-theme");
-  const savedGrad = (() => { try { return localStorage.getItem("gradTheme"); } catch { return null; } })();
+  document.body.classList.remove("g1", "g2", "g3");
+  document.body.classList.add(val);
+  try { localStorage.setItem("gradTheme", val); } catch {}
 
-  if (savedGrad && ["g1", "g2", "g3"].includes(savedGrad)) {
-    if (gradSel) gradSel.value = savedGrad;
-    applyGradTheme(savedGrad);
-  } else {
-    applyGradTheme("g1");
-  }
-  gradSel?.addEventListener("change", (e) => applyGradTheme(e.target.value));
+  // update slider gradient fill after theme changes
+  setRangeFill(document.getElementById("radius-slider"));
+}
+
+const gradSel = document.getElementById("grad-theme");
+const savedGrad = (() => { try { return localStorage.getItem("gradTheme"); } catch { return null; } })();
+
+if (savedGrad && ["g1", "g2", "g3"].includes(savedGrad)) {
+  if (gradSel) gradSel.value = savedGrad;
+  applyGradTheme(savedGrad);
+} else {
+  applyGradTheme("g1");
+}
+
+gradSel?.addEventListener("change", (e) => {
+  applyGradTheme(e.target.value);
+});
+
 
   // Place type
   function setType(t) {
@@ -822,6 +863,8 @@ function bindUI() {
   document.getElementById("type-night")?.addEventListener("click", () => setType("night"));
   setType("cafe");
 
+  updateRadiusUI();
+
   // Use my location
   document.getElementById("loc-btn")?.addEventListener("click", () => {
     if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
@@ -831,6 +874,8 @@ function bindUI() {
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
         userLatLon = { lat, lon };
+        updateRadiusUI();
+
 
         if (userMarker) map.removeLayer(userMarker);
 
@@ -852,6 +897,8 @@ function bindUI() {
   });
 
   // Radius slider (debounced auto refresh)
+  const chip = document.getElementById("radius-chip");
+  const chipBtn = document.getElementById("radius-chip-btn");
   const rEl = document.getElementById("radius-slider");
   const rValEl = document.getElementById("radius-val");
 
@@ -862,17 +909,24 @@ function bindUI() {
 
   nearbyRadiusM = Number(rEl?.value) || 1400;
   setRadiusLabel(nearbyRadiusM);
+  setRangeFill(rEl);
+
+  chipBtn?.addEventListener("click", () => {
+  if (!hasNearbyAnchor()) return;
+  chip?.classList.toggle("is-open");
+});
 
   let nearbyDebounce = null;
   rEl?.addEventListener("input", (e) => {
-    nearbyRadiusM = Number(e.target.value) || 1400;
-    setRadiusLabel(nearbyRadiusM);
+  nearbyRadiusM = Number(e.target.value) || 1400;
+  setRadiusLabel(nearbyRadiusM);
+  setRangeFill(rEl);
 
-    clearTimeout(nearbyDebounce);
-    nearbyDebounce = setTimeout(() => {
-      const anchor = getAnchorLatLonForRecommendations();
-      if (anchor) recommendNearby();
-    }, 500);
+  clearTimeout(nearbyDebounce);
+  nearbyDebounce = setTimeout(() => {
+    const anchor = getAnchorLatLonForRecommendations();
+    if (anchor) recommendNearby();
+  }, 500);
   });
 
   // Recommend nearby button
@@ -885,6 +939,7 @@ function bindUI() {
     recoLayer.clearLayers();
     searchLayer.clearLayers();
     clearRoute();
+    updateRadiusUI();
     lastOrder = null;
     lastLabel = "";
     setAlgoActive("");

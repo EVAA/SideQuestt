@@ -472,5 +472,115 @@ body.dark .stop-badge-inner{
   box-shadow: 0 10px 18px rgba(0,0,0,0.45);
 }
 
+/* ===== Radius chip (collapsed/expanded) ===== */
+.radius-chip{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding: 0;
+}
+
+.radius-chip-btn{
+  height:44px;
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding: 0 14px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow2);
+  cursor: pointer;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.radius-chip .chev{
+  opacity: 0.75;
+  font-size: 12px;
+  transform: translateY(-1px);
+}
+
+.radius-panel{
+  display:none;
+  padding: 10px 12px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  box-shadow: var(--shadow2);
+}
+
+.radius-chip.is-open .radius-panel{ display:block; }
+
+.radius-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.radius-label{
+  font-weight: 800;
+  color: var(--muted);
+}
+
+.radius-hint{
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ===== Disabled/fade state until anchor exists ===== */
+.radius-chip.is-disabled{
+  opacity: 0.45;
+  filter: saturate(0.8);
+}
+
+.radius-chip.is-disabled .radius-chip-btn{
+  cursor: not-allowed;
+}
+
+.radius-chip.is-disabled .radius-panel{
+  pointer-events: none;
+}
+
+/* ===== Gradient-filled range track (animated) ===== */
+#radius-slider{
+  width: 190px;
+  height: 6px;
+  border-radius: 999px;
+  appearance: none;
+  -webkit-appearance: none;
+
+  /* two-layer background:
+     1) gradient fill up to pct
+     2) muted remainder */
+  background:
+    var(--grad) 0/var(--range-pct, 30%) 100% no-repeat,
+    rgba(0,0,0,0.12);
+  transition: background-size 180ms ease;
+}
+
+body.dark #radius-slider{
+  background:
+    var(--grad) 0/var(--range-pct, 30%) 100% no-repeat,
+    rgba(255,255,255,0.14);
+}
+
+/* thumb */
+#radius-slider::-webkit-slider-thumb{
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: white;
+  border: 2px solid rgba(0,0,0,0.12);
+  box-shadow: 0 8px 16px rgba(0,0,0,0.16);
+}
+
+body.dark #radius-slider::-webkit-slider-thumb{
+  background: rgba(15,23,42,0.95);
+  border: 2px solid rgba(255,255,255,0.20);
+}
 
 
