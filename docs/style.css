@@ -511,3 +511,17 @@ body.dark .toast{
   background: rgba(255,31,122,0.22);
   border: 1px solid rgba(255,31,122,0.55);
 }
+/* Any button marked selected gets gradient */
+button.is-on,
+button.is-selected{
+  background: var(--grad) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
+
+/* Keep ghost buttons readable when selected */
+button.ghost.is-on,
+button.ghost.is-selected{
+  background: var(--grad) !important;
+}
+

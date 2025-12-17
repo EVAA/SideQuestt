@@ -45,7 +45,7 @@ let poiLayer = L.layerGroup().addTo(map);
 let recoLayer = L.layerGroup().addTo(map);
 let heatLayer = L.layerGroup().addTo(map);
 let routeBadgeLayer = L.layerGroup().addTo(map);
-let routeArrowLayer = L.layerGroup().addTo(map);
+
 
 let currPois = [];
 let routeLine = null;
@@ -69,6 +69,15 @@ function safe(s) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
+}
+
+let lastSelectedBtn = null;
+
+function selectBtn(el) {
+  if (!el || el.tagName !== "BUTTON") return;
+  if (lastSelectedBtn) lastSelectedBtn.classList.remove("is-selected");
+  el.classList.add("is-selected");
+  lastSelectedBtn = el;
 }
 
 function renderMsg(msg) { setOutHTML(`<div class="out-title">${safe(msg)}</div>`); }
@@ -445,8 +454,6 @@ function clearRoute() {
 
   if (routeAnimTimer) { clearInterval(routeAnimTimer); routeAnimTimer = null; }
   if (dashAnimTimer) { clearInterval(dashAnimTimer); dashAnimTimer = null; }
-
-  routeArrowLayer.clearLayers();
   clearBadgeMarkers();
 }
 
@@ -503,7 +510,6 @@ function drawRoute(order) {
       clearInterval(routeAnimTimer);
       routeAnimTimer = null;
       startDashAnimation();
-      drawRouteArrows(pts);
     }
   }, 18);
 
@@ -957,6 +963,17 @@ function bindUI() {
     renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
   });
 
+  document.addEventListener("click", (e) => {
+  const btn = e.target?.closest?.("button");
+  if (!btn) return;
+
+  // don't highlight "Remove" pills inside list
+  if (btn.matches(".pill[data-del]")) return;
+
+  selectBtn(btn);
+});
+
+
   document.getElementById("start-toggle")?.addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
     updateStartToggle();
@@ -976,24 +993,23 @@ function bindUI() {
 
   // Night mode (default gradient day=g1, night=g3 unless user changed)
   document.getElementById("night-toggle")?.addEventListener("change", (e) => {
-    const on = !!e.target.checked;
-    document.body.classList.toggle("dark", on);
-    setBasemap(on);
+  const on = !!e.target.checked;
+  document.body.classList.toggle("dark", on);
+  setBasemap(on);
 
-    if (!userPickedGradient) {
-      const gradSel = document.getElementById("grad-theme");
-      if (on) {
-        if (gradSel) gradSel.value = "g3";
-        applyGradTheme("g3");
-      } else {
-        if (gradSel) gradSel.value = "g1";
-        applyGradTheme("g1");
-      }
-    }
+  const gradSel = document.getElementById("grad-theme");
+  if (on) {
+    if (gradSel) gradSel.value = "g3";
+    applyGradTheme("g3");
+  } else {
+    if (gradSel) gradSel.value = "g1";
+    applyGradTheme("g1");
+  }
 
-    refreshMapStyles();
-    setRangeFill(document.getElementById("radius-slider"));
-  });
+  refreshMapStyles();
+  setRangeFill(document.getElementById("radius-slider"));
+});
+
 
   // Gradient theme picker
   const gradSel = document.getElementById("grad-theme");
