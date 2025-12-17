@@ -43,15 +43,19 @@ let nearbyRadiusM = 1400;
 let userMarker = null;
 let poiLayer = L.layerGroup().addTo(map);
 let recoLayer = L.layerGroup().addTo(map);
-let searchLayer = L.layerGroup().addTo(map);
+let heatLayer = L.layerGroup().addTo(map);
 let routeBadgeLayer = L.layerGroup().addTo(map);
+let routeArrowLayer = L.layerGroup().addTo(map);
 
 let currPois = [];
 let routeLine = null;
+
 let routeAnimTimer = null;
+let dashAnimTimer = null;
 
 let lastOrder = null;
 let lastLabel = "";
+let heatOn = false;
 
 // ===== UI helpers =====
 function setOutHTML(html) { out.innerHTML = html; }
@@ -64,44 +68,12 @@ function safe(s) {
     .replaceAll('"', "&quot;");
 }
 
-function hasNearbyAnchor() {
-  return !!getAnchorLatLonForRecommendations();
-}
-
-function setRangeFill(el) {
-  if (!el) return;
-  const min = Number(el.min) || 0;
-  const max = Number(el.max) || 100;
-  const val = Number(el.value) || min;
-  const pct = ((val - min) / Math.max(1, (max - min))) * 100;
-  el.style.setProperty("--range-pct", `${pct.toFixed(1)}%`);
-}
-
-function updateRadiusUI() {
-  const chip = document.getElementById("radius-chip");
-  const chipBtn = document.getElementById("radius-chip-btn");
-  const slider = document.getElementById("radius-slider");
-
-  const ok = hasNearbyAnchor();
-
-  chip?.classList.toggle("is-disabled", !ok);
-  chipBtn && (chipBtn.disabled = !ok);
-
-  // keep fill synced
-  setRangeFill(slider);
-}
-
-
 function renderMsg(msg) { setOutHTML(`<div class="out-title">${safe(msg)}</div>`); }
 
 function setOn(id, on) {
   const el = document.getElementById(id);
   if (!el) return;
   el.classList.toggle("is-on", !!on);
-}
-
-function setAlgoActive(id) {
-  ["algo-nn", "algo-2opt", "algo-sa", "algo-ga"].forEach(x => setOn(x, x === id));
 }
 
 function updateStartToggle() {
@@ -150,51 +122,54 @@ function accentStyle() {
 
 function refreshMapStyles() {
   const a = accentStyle();
-  setRangeFill(document.getElementById("radius-slider"));
-
 
   poiLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
   recoLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
-  searchLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
-
   if (routeLine?.setStyle) routeLine.setStyle({ color: a.color });
   if (userMarker?.setStyle) userMarker.setStyle({ color: a.color, fillColor: a.fillColor });
 
   if (lastOrder && lastOrder.length) drawRouteBadges(lastOrder);
 }
 
-// ===== Numbered route badges =====
-function drawRouteBadges(order) {
-  routeBadgeLayer.clearLayers();
-  if (!order || !order.length) return;
+// ===== Helpers: route points + google maps route link =====
+function getStartPointForRoute() {
+  if (startMode === "user" && userLatLon) return { lat: userLatLon.lat, lon: userLatLon.lon, name: "You" };
+  if (currPois.length) return { lat: currPois[0].lat, lon: currPois[0].lon, name: currPois[0].name };
+  return null;
+}
 
-  const seq = [];
+function buildRoutePoints(order) {
+  if (!order || !order.length) return [];
+
   if (startMode === "user" && userLatLon) {
-    seq.push({ lat: userLatLon.lat, lon: userLatLon.lon, n: 1 });
-    order.forEach((idx, k) => {
-      const p = currPois[idx];
-      seq.push({ lat: p.lat, lon: p.lon, n: k + 2 });
-    });
-  } else {
-    order.forEach((idx, k) => {
-      const p = currPois[idx];
-      seq.push({ lat: p.lat, lon: p.lon, n: k + 1 });
-    });
+    const pts = [{ lat: userLatLon.lat, lon: userLatLon.lon, name: "You", kind: "start" }];
+    order.forEach(idx => pts.push({ lat: currPois[idx].lat, lon: currPois[idx].lon, name: currPois[idx].name, kind: "poi", idx }));
+    if (loopMode) pts.push({ lat: userLatLon.lat, lon: userLatLon.lon, name: "You", kind: "end" });
+    return pts;
   }
 
-  const a = accentStyle();
+  const pts = order.map(idx => ({ lat: currPois[idx].lat, lon: currPois[idx].lon, name: currPois[idx].name, kind: "poi", idx }));
+  if (loopMode) pts.push({ lat: currPois[order[0]].lat, lon: currPois[order[0]].lon, name: currPois[order[0]].name, kind: "end" });
+  return pts;
+}
 
-  seq.forEach(s => {
-    const icon = L.divIcon({
-      className: "stop-badge",
-      html: `<div class="stop-badge-inner" style="--badge-ring:${a.color}">${s.n}</div>`,
-      iconSize: [26, 26],
-      iconAnchor: [13, 13]
-    });
+function googleMapsFullRouteUrl(order) {
+  // Google Maps URL supports origin + destination + waypoints (walking)
+  const pts = buildRoutePoints(order);
+  if (pts.length < 2) return null;
 
-    L.marker([s.lat, s.lon], { icon, interactive: false, zIndexOffset: 900 })
-      .addTo(routeBadgeLayer);
-  });
+  const origin = `${pts[0].lat},${pts[0].lon}`;
+  const destination = `${pts[pts.length - 1].lat},${pts[pts.length - 1].lon}`;
+
+  // intermediates excluding first and last
+  const mids = pts.slice(1, -1).map(p => `${p.lat},${p.lon}`);
+  const wp = mids.length ? `&waypoints=${encodeURIComponent(mids.join("|"))}` : "";
+
+  return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${wp}&travelmode=walking`;
+}
+
+function gmapsDirUrl(a, b) {
+  return `https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lon}&destination=${b.lat},${b.lon}&travelmode=walking`;
 }
 
 // ===== Distances =====
@@ -218,7 +193,7 @@ function distFromUserToIdx(i) {
 }
 
 function routeLengthKm(order) {
-  if (!order.length) return 0;
+  if (!order || !order.length) return 0;
 
   if (startMode === "user" && userLatLon) {
     let tot = 0;
@@ -369,17 +344,123 @@ function gaLite(bestOf = 40) {
   return best;
 }
 
+// ===== Route arrows + dashed motion =====
+function bearingDeg(a, b) {
+  const toRad = d => d * Math.PI / 180;
+  const toDeg = r => r * 180 / Math.PI;
+
+  const lat1 = toRad(a.lat), lon1 = toRad(a.lon);
+  const lat2 = toRad(b.lat), lon2 = toRad(b.lon);
+
+  const y = Math.sin(lon2 - lon1) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lon2 - lon1);
+  let brng = toDeg(Math.atan2(y, x));
+  brng = (brng + 360) % 360;
+  return brng;
+}
+
+function drawRouteArrows(points) {
+  routeArrowLayer.clearLayers();
+  if (!points || points.length < 2) return;
+
+  const a = accentStyle();
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+
+    // midpoint
+    const mid = { lat: (p1.lat + p2.lat) / 2, lon: (p1.lon + p2.lon) / 2 };
+    const ang = bearingDeg(p1, p2);
+
+    const icon = L.divIcon({
+      className: "route-arrow",
+      html: `<div class="route-arrow-inner" style="--arrow:${a.color}; transform: rotate(${ang}deg)">➤</div>`,
+      iconSize: [20, 20],
+      iconAnchor: [10, 10]
+    });
+
+    L.marker([mid.lat, mid.lon], { icon, interactive: false, zIndexOffset: 700 })
+      .addTo(routeArrowLayer);
+  }
+}
+
+function startDashAnimation() {
+  if (!routeLine) return;
+  if (dashAnimTimer) clearInterval(dashAnimTimer);
+
+  let off = 0;
+  dashAnimTimer = setInterval(() => {
+    if (!routeLine) return;
+    off = (off - 2) % 1000;
+    try {
+      routeLine.setStyle({ dashOffset: String(off) });
+    } catch {}
+  }, 60);
+}
+
+// ===== Badges (hover sync) =====
+let badgeMarkers = []; // {pos, marker}
+function clearBadgeMarkers() {
+  badgeMarkers = [];
+  routeBadgeLayer.clearLayers();
+}
+
+function highlightListPos(pos, on) {
+  const el = document.querySelector(`.route-bubbles [data-pos="${pos}"]`);
+  if (!el) return;
+  el.classList.toggle("is-hover", !!on);
+}
+
+function drawRouteBadges(order) {
+  clearBadgeMarkers();
+  if (!order || !order.length) return;
+
+  const seq = [];
+
+  if (startMode === "user" && userLatLon) {
+    seq.push({ lat: userLatLon.lat, lon: userLatLon.lon, pos: 1, name: "You" });
+    order.forEach((idx, k) => {
+      const p = currPois[idx];
+      seq.push({ lat: p.lat, lon: p.lon, pos: k + 2, name: p.name });
+    });
+  } else {
+    order.forEach((idx, k) => {
+      const p = currPois[idx];
+      seq.push({ lat: p.lat, lon: p.lon, pos: k + 1, name: p.name });
+    });
+  }
+
+  const a = accentStyle();
+
+  seq.forEach(s => {
+    const icon = L.divIcon({
+      className: "stop-badge",
+      html: `<div class="stop-badge-inner" style="--badge-ring:${a.color}">${s.pos}</div>`,
+      iconSize: [26, 26],
+      iconAnchor: [13, 13]
+    });
+
+    const mk = L.marker([s.lat, s.lon], { icon, interactive: true, zIndexOffset: 900 })
+      .addTo(routeBadgeLayer);
+
+    mk.on("mouseover", () => highlightListPos(s.pos, true));
+    mk.on("mouseout", () => highlightListPos(s.pos, false));
+
+    badgeMarkers.push({ pos: s.pos, marker: mk });
+  });
+}
+
 // ===== Draw + Output =====
 function clearRoute() {
   if (routeLine) map.removeLayer(routeLine);
   routeLine = null;
 
-  routeBadgeLayer.clearLayers();
+  if (routeAnimTimer) { clearInterval(routeAnimTimer); routeAnimTimer = null; }
+  if (dashAnimTimer) { clearInterval(dashAnimTimer); dashAnimTimer = null; }
 
-  if (routeAnimTimer) {
-    clearInterval(routeAnimTimer);
-    routeAnimTimer = null;
-  }
+  routeArrowLayer.clearLayers();
+  clearBadgeMarkers();
 }
 
 function plotPois() {
@@ -395,224 +476,203 @@ function plotPois() {
       opacity: 0.9,
       fillOpacity: 0.9,
       color: a.color,
-      fillColor: a.fillColor
+      fillColor: a.fillColor,
+      className: "poi-dot"
     }).addTo(poiLayer).bindPopup(safe(p.name));
   });
 
   enableAlgos(currPois.length >= 2);
+  document.getElementById("optimize-btn")?.toggleAttribute("disabled", !lastOrder);
 }
 
 function drawRoute(order) {
-  if (!order.length) return;
+  if (!order || !order.length) return;
 
-  let pts = [];
+  const pts = buildRoutePoints(order);
+  const latlngs = pts.map(p => [p.lat, p.lon]);
 
-  if (startMode === "user" && userLatLon) {
-    pts.push([userLatLon.lat, userLatLon.lon]);
-    pts.push(...order.map(i => [currPois[i].lat, currPois[i].lon]));
-    if (loopMode) pts.push([userLatLon.lat, userLatLon.lon]);
-  } else {
-    pts = order.map(i => [currPois[i].lat, currPois[i].lon]);
-    if (loopMode) pts.push([currPois[order[0]].lat, currPois[order[0]].lon]);
-  }
-
-  if (routeLine) map.removeLayer(routeLine);
-  routeLine = null;
-
-  if (routeAnimTimer) {
-    clearInterval(routeAnimTimer);
-    routeAnimTimer = null;
-  }
+  clearRoute();
 
   const a = accentStyle();
 
-  routeLine = L.polyline([pts[0]], {
+  routeLine = L.polyline([latlngs[0]], {
     weight: 7,
     opacity: 0.95,
     lineJoin: "round",
-    color: a.color
+    color: a.color,
+    dashArray: "12 10",
+    dashOffset: "0",
+    className: "route-line"
   }).addTo(map);
 
+  // animated drawing (point-by-point)
   let i = 1;
   routeAnimTimer = setInterval(() => {
-    if (!routeLine) {
-      clearInterval(routeAnimTimer);
-      routeAnimTimer = null;
-      return;
-    }
-    routeLine.addLatLng(pts[i]);
+    if (!routeLine) return;
+    routeLine.addLatLng(latlngs[i]);
     i += 1;
-    if (i >= pts.length) {
+    if (i >= latlngs.length) {
       clearInterval(routeAnimTimer);
       routeAnimTimer = null;
+      startDashAnimation();
+      drawRouteArrows(pts);
     }
   }, 18);
 
   drawRouteBadges(order);
 }
 
+// ===== Heatmap =====
+function buildHeatFromReco() {
+  heatLayer.clearLayers();
+  if (!heatOn) return;
+
+  const buckets = new Map();
+  recoLayer.eachLayer(l => {
+    const ll = l.getLatLng?.();
+    if (!ll) return;
+    const key = `${ll.lat.toFixed(3)},${ll.lng.toFixed(3)}`;
+    buckets.set(key, (buckets.get(key) || 0) + 1);
+  });
+
+  const a = accentStyle();
+  buckets.forEach((cnt, key) => {
+    const [latS, lonS] = key.split(",");
+    const lat = Number(latS), lon = Number(lonS);
+    const r = Math.min(40, 10 + cnt * 6);
+
+    L.circleMarker([lat, lon], {
+      radius: r,
+      weight: 0,
+      opacity: 0,
+      fillOpacity: 0.10,
+      fillColor: a.color,
+      className: "heat-blob"
+    }).addTo(heatLayer);
+  });
+}
+
+// ===== Route rendering + hover sync + per-leg directions + full route link =====
 function renderRoute(order, label) {
   const km = routeLengthKm(order);
   const walkStr = walkTimeStrFromKm(km);
-  const startLabel = (startMode === "user" && userLatLon) ? "My Location" : "POI[0]";
+  const fullUrl = googleMapsFullRouteUrl(order);
 
   const items = [];
+  const pts = buildRoutePoints(order);
 
-  function gmapsDirUrl(a, b) {
-  // a, b are {lat, lon}
-  return `https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lon}&destination=${b.lat},${b.lon}&travelmode=walking`;
-}
+  // Build list items for EACH point in pts (excluding final duplicate return bubble; we still show separately)
+  // Numbering matches badges.
+  const showReturn = loopMode && pts.length >= 2;
 
-if (startMode === "user" && userLatLon) {
-  const a = { lat: userLatLon.lat, lon: userLatLon.lon };
-  const b = order.length ? { lat: currPois[order[0]].lat, lon: currPois[order[0]].lon } : null;
-  const legUrl = b ? gmapsDirUrl(a, b) : null;
+  // For leg directions: pos i -> pos i+1 (based on list numbering)
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const pos = i + 1;
 
-  items.push(`
-    <li class="bubble">
-      <div class="num">1</div>
-      <div>
-        <div class="name">You</div>
-        <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
-      </div>
-      <div class="row-actions">
-        ${legUrl ? `<a class="pill" href="${legUrl}" target="_blank" rel="noopener">1 → 2</a>` : ""}
-      </div>
-    </li>
-  `);
-}
+    // Next point for directions (not for the very last point)
+    let legUrl = null;
+    let legLabel = "";
+    if (i < pts.length - 1) {
+      legUrl = gmapsDirUrl({ lat: pts[i].lat, lon: pts[i].lon }, { lat: pts[i + 1].lat, lon: pts[i + 1].lon });
+      legLabel = `${pos} → ${pos + 1}`;
+    }
 
+    // If this is the last point and it is the return-to-start point, we skip listing it as a normal stop bubble
+    if (showReturn && i === pts.length - 1) break;
 
-  if (startMode === "user" && userLatLon) {
-    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${userLatLon.lat},${userLatLon.lon}`;
+    // Remove button only for actual POIs
+    const canRemove = (p.kind === "poi") && (typeof p.idx === "number");
+
     items.push(`
-      <li class="bubble">
-        <div class="num">1</div>
+      <li class="bubble" data-pos="${pos}">
+        <div class="num">${pos}</div>
         <div>
-          <div class="name">You</div>
-          <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
+          <div class="name">${safe(p.name || "Stop")}</div>
+          <div class="hint">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>
         </div>
         <div class="row-actions">
-          <a class="pill" href="${mapsUrl}" target="_blank" rel="noopener">Open in Maps</a>
+          ${legUrl ? `<a class="pill" href="${legUrl}" target="_blank" rel="noopener">${safe(legLabel)}</a>` : ""}
+          ${canRemove ? `<button class="pill" data-del="${p.idx}" type="button">Remove</button>` : ""}
         </div>
       </li>
     `);
   }
 
-  order.forEach((idx, k) => {
-  const p = currPois[idx];
-
-  const num = (startMode === "user" && userLatLon) ? (k + 2) : (k + 1);
-
-  // Current stop coordinate
-  const a = { lat: p.lat, lon: p.lon };
-
-  // Next stop coordinate (or loop back to start if loopMode)
-  let b = null;
-
-  if (k < order.length - 1) {
-    const nxt = currPois[order[k + 1]];
-    b = { lat: nxt.lat, lon: nxt.lon };
-  } else if (loopMode) {
-    if (startMode === "user" && userLatLon) b = { lat: userLatLon.lat, lon: userLatLon.lon };
-    else {
-      const first = currPois[order[0]];
-      b = { lat: first.lat, lon: first.lon };
-    }
+  // Return bubble (visual only)
+  if (showReturn) {
+    const pos = pts.length;
+    const destName = (startMode === "user" && userLatLon) ? "You" : (currPois.length ? currPois[0].name : "Start");
+    items.push(`
+      <li class="bubble is-return" data-pos="${pos}">
+        <div class="num">${pos}</div>
+        <div>
+          <div class="name">Return to ${safe(destName)}</div>
+          <div class="hint">${pts[pts.length - 1].lat.toFixed(4)}, ${pts[pts.length - 1].lon.toFixed(4)}</div>
+        </div>
+        <div class="row-actions"></div>
+      </li>
+    `);
   }
 
-  const legUrl = b ? gmapsDirUrl(a, b) : null;
-
-  // Leg label: e.g. "2 → 3", and on the last one with loop: "N → 1"
-  let legLabel = "";
-  if (b) {
-    const fromN = num;
-    const toN =
-      (k < order.length - 1)
-        ? (num + 1)
-        : (loopMode
-            ? ((startMode === "user" && userLatLon) ? 1 : 1)
-            : "");
-    legLabel = (toN !== "") ? `${fromN} → ${toN}` : "";
-  }
-
-  items.push(`
-    <li class="bubble">
-      <div class="num">${num}</div>
-      <div>
-        <div class="name">${safe(p.name)}</div>
-        <div class="hint">${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</div>
-      </div>
-      <div class="row-actions">
-        ${legUrl ? `<a class="pill" href="${legUrl}" target="_blank" rel="noopener">${safe(legLabel || "Directions")}</a>` : ""}
-        <button class="pill" data-del="${idx}" type="button">Remove</button>
-      </div>
-    </li>
-  `);
-});
-
-
-  if (loopMode && order.length) {
-    if (startMode === "user" && userLatLon) {
-      items.push(`
-        <li class="bubble">
-          <div class="num">${order.length + 2}</div>
-          <div>
-            <div class="name">Return to You</div>
-            <div class="hint">(${userLatLon.lat.toFixed(4)}, ${userLatLon.lon.toFixed(4)})</div>
-          </div>
-          <div class="row-actions"></div>
-        </li>
-      `);
-    } else {
-      const p0 = currPois[order[0]];
-      items.push(`
-        <li class="bubble">
-          <div class="num">${order.length + 1}</div>
-          <div>
-            <div class="name">Return to ${safe(p0.name)}</div>
-            <div class="hint">${p0.lat.toFixed(4)}, ${p0.lon.toFixed(4)}</div>
-          </div>
-          <div class="row-actions"></div>
-        </li>
-      `);
-    }
-  }
+  const improveInfo = (lastOrder && lastOrder.length)
+    ? `<span class="chip">Walk: ${safe(walkStr)}</span>`
+    : "";
 
   setOutHTML(`
-    <div class="route-header">
-      <div class="title">${safe(label || "Route")}</div>
-      <div class="meta">
-        <div class="chip">Mode: ${safe(placeTypeLabel())}</div>
-        <div class="chip">Start: ${safe(startLabel)}</div>
-        <div class="chip">Distance: ${km.toFixed(2)} km</div>
-        <div class="chip">Walk: ${safe(walkStr)}</div>
-        <div class="chip">Stops: ${(startMode === "user" && userLatLon) ? (order.length + 1) : order.length}</div>
+    <div class="statsbar">
+      <div class="stats-left">
+        <span class="chip">${safe(label || "Route")}</span>
+        <span class="chip">Distance: ${km.toFixed(2)} km</span>
+        <span class="chip">Walk: ${safe(walkStr)}</span>
+        <span class="chip">${loopMode ? "Loop" : "One-way"}</span>
+      </div>
+      <div class="stats-right">
+        ${fullUrl ? `<a class="pill" href="${fullUrl}" target="_blank" rel="noopener">Open full route in Google Maps</a>` : ""}
       </div>
     </div>
     <ol class="route-bubbles">${items.join("")}</ol>
   `);
 
+  // hover sync: list -> badge
+  document.querySelectorAll(".route-bubbles .bubble[data-pos]").forEach(li => {
+    li.addEventListener("mouseenter", () => {
+      const pos = Number(li.getAttribute("data-pos"));
+      const bm = badgeMarkers.find(x => x.pos === pos)?.marker;
+      bm?.setZIndexOffset?.(1200);
+      li.classList.add("is-hover");
+    });
+    li.addEventListener("mouseleave", () => {
+      const pos = Number(li.getAttribute("data-pos"));
+      const bm = badgeMarkers.find(x => x.pos === pos)?.marker;
+      bm?.setZIndexOffset?.(900);
+      li.classList.remove("is-hover");
+    });
+  });
+
+  // remove
   document.querySelectorAll("[data-del]").forEach(btn => {
     btn.addEventListener("click", () => {
       const idx = Number(btn.getAttribute("data-del"));
       if (!Number.isFinite(idx)) return;
       currPois.splice(idx, 1);
-      plotPois();
       lastOrder = null;
       lastLabel = "";
+      plotPois();
       renderMsg("Removed stop. Re-run an algorithm.");
-      setAlgoActive("");
     });
   });
+
+  // enable optimize if we have a route
+  document.getElementById("optimize-btn")?.toggleAttribute("disabled", !(lastOrder && lastOrder.length));
 }
 
 function addPOI(name, lat, lon) {
   currPois.push({ name, lat, lon });
   plotPois();
-  updateRadiusUI();
   map.setView([lat, lon], 15);
   renderMsg(`Added: ${name}.`);
+  updateRadiusUI();
 }
 
 // ===== Search =====
@@ -663,6 +723,7 @@ function scoreReco(el) {
   return named * 100 + tagCount;
 }
 
+// Recommendation markers: popup with name + button
 function addRecoMarker(p) {
   const lat = p.lat;
   const lon = p.lon;
@@ -676,7 +737,8 @@ function addRecoMarker(p) {
     opacity: 0.95,
     fillOpacity: 0.95,
     color: a.color,
-    fillColor: a.fillColor
+    fillColor: a.fillColor,
+    className: "reco-dot"
   }).addTo(recoLayer);
 
   const btnId = `addstop-${p._id}`;
@@ -710,6 +772,7 @@ async function recommendNearby() {
 
   renderMsg(`Finding nearby ${placeTypeLabel()}…`);
   recoLayer.clearLayers();
+  if (heatOn) heatLayer.clearLayers();
 
   const q = `
 [out:json][timeout:25];
@@ -743,34 +806,152 @@ out center tags;
     }
 
     pts.sort((a, b) => (b._score - a._score));
-    const top = pts.slice(0, 40);
+    const top = pts.slice(0, 50);
     if (!top.length) return renderMsg(`No nearby ${placeTypeLabel()} found.`);
 
     top.forEach(addRecoMarker);
+    refreshMapStyles();
 
-    const anchorLabel = (startMode === "poi0" && currPois.length) ? "POI[0]" : "My Location";
-
-    setOutHTML(`
-      <div class="route-header">
-        <div class="title">Recommended nearby • ${safe(placeTypeLabel())}</div>
-        <div class="meta">
-          <div class="chip">Near: ${safe(anchorLabel)}</div>
-          <div class="chip">Shown: ${top.length}</div>
-          <div class="chip">Radius: ${(radiusM / 1000).toFixed(1)} km</div>
-          <div class="chip">Tap marker → Add</div>
-        </div>
-      </div>
-    `);
+    if (heatOn) buildHeatFromReco();
 
     const bounds = L.latLngBounds(top.map(p => [p.lat, p.lon]));
     map.fitBounds(bounds, { padding: [20, 20] });
 
-    refreshMapStyles();
+    showToast(`Found ${top.length}`);
 
   } catch (e) {
     console.error(e);
     renderMsg(`Nearby search failed: ${e?.message || "unknown error"}`);
   }
+}
+
+// ===== Radius chip + gradient slider fill =====
+function hasNearbyAnchor() { return !!getAnchorLatLonForRecommendations(); }
+
+function setRangeFill(el) {
+  if (!el) return;
+  const min = Number(el.min) || 0;
+  const max = Number(el.max) || 100;
+  const val = Number(el.value) || min;
+  const pct = ((val - min) / Math.max(1, (max - min))) * 100;
+  el.style.setProperty("--range-pct", `${pct.toFixed(1)}%`);
+}
+
+function updateRadiusUI() {
+  const chip = document.getElementById("radius-chip");
+  const chipBtn = document.getElementById("radius-chip-btn");
+  const slider = document.getElementById("radius-slider");
+
+  const ok = hasNearbyAnchor();
+  chip?.classList.toggle("is-disabled", !ok);
+  if (chipBtn) chipBtn.disabled = !ok;
+
+  setRangeFill(slider);
+}
+
+// ===== Presets =====
+function applyPreset(name) {
+  const nightToggle = document.getElementById("night-toggle");
+  const gradSel = document.getElementById("grad-theme");
+  const rEl = document.getElementById("radius-slider");
+  const rValEl = document.getElementById("radius-val");
+
+  const setRad = (m) => {
+    nearbyRadiusM = m;
+    if (rEl) rEl.value = String(m);
+    if (rValEl) rValEl.textContent = (m / 1000).toFixed(1) + " km";
+    setRangeFill(rEl);
+  };
+
+  if (name === "daycrawl") {
+    nightToggle && (nightToggle.checked = false);
+    document.body.classList.toggle("dark", false);
+    setBasemap(false);
+    gradSel && (gradSel.value = "g1");
+    applyGradTheme("g1");
+    placeType = "cafe";
+    setRad(1400);
+    loopMode = true;
+  }
+
+  if (name === "nightout") {
+    nightToggle && (nightToggle.checked = true);
+    document.body.classList.toggle("dark", true);
+    setBasemap(true);
+    gradSel && (gradSel.value = "g3");
+    applyGradTheme("g3");
+    placeType = "night";
+    setRad(2200);
+    loopMode = true;
+  }
+
+  if (name === "cozy") {
+    nightToggle && (nightToggle.checked = false);
+    document.body.classList.toggle("dark", false);
+    setBasemap(false);
+    gradSel && (gradSel.value = "g2");
+    applyGradTheme("g2");
+    placeType = "cafe";
+    setRad(900);
+    loopMode = false;
+  }
+
+  if (name === "party") {
+    nightToggle && (nightToggle.checked = true);
+    document.body.classList.toggle("dark", true);
+    setBasemap(true);
+    gradSel && (gradSel.value = "g3");
+    applyGradTheme("g3");
+    placeType = "night";
+    setRad(3000);
+    loopMode = true;
+  }
+
+  if (name === "slowwalk") {
+    nightToggle && (nightToggle.checked = false);
+    document.body.classList.toggle("dark", false);
+    setBasemap(false);
+    gradSel && (gradSel.value = "g1");
+    applyGradTheme("g1");
+    placeType = "cafe";
+    setRad(700);
+    loopMode = false;
+  }
+
+  updateStartToggle();
+  document.getElementById("loop-toggle") && (document.getElementById("loop-toggle").textContent = loopMode ? "Loop: ON" : "Loop: OFF");
+  refreshMapStyles();
+  updateRadiusUI();
+  renderMsg(`Preset applied: ${name}`);
+}
+
+// ===== Gradient theme =====
+function applyGradTheme(val) {
+  document.body.classList.remove("g1", "g2", "g3");
+  document.body.classList.add(val);
+  try { localStorage.setItem("gradTheme", val); } catch {}
+  setRangeFill(document.getElementById("radius-slider"));
+}
+
+// ===== Optimize current route =====
+function optimizeCurrentRoute() {
+  if (!lastOrder || !lastOrder.length) return;
+
+  const before = routeLengthKm(lastOrder);
+
+  // quick polish: 2-opt then short SA
+  let cand = twoOpt(lastOrder.slice());
+  cand = saOrder(cand, 1200);
+
+  const after = routeLengthKm(cand);
+  const pct = before > 1e-9 ? ((before - after) / before) * 100 : 0;
+
+  lastOrder = cand.slice();
+  lastLabel = `Route (Optimized) • saved ${pct.toFixed(1)}%`;
+
+  drawRoute(lastOrder);
+  renderRoute(lastOrder, lastLabel);
+  showToast(`Saved ${pct.toFixed(1)}%`);
 }
 
 // ===== Bind UI =====
@@ -796,16 +977,14 @@ function bindUI() {
       renderRoute(lastOrder, lastLabel);
       return;
     }
-
     renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
   });
 
-  // Start mode toggle
+  // Start toggle
   document.getElementById("start-toggle")?.addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
     updateStartToggle();
     updateRadiusUI();
-
 
     if (lastOrder && lastOrder.length) {
       drawRoute(lastOrder);
@@ -825,34 +1004,30 @@ function bindUI() {
     document.body.classList.toggle("dark", on);
     setBasemap(on);
     refreshMapStyles();
+    setRangeFill(document.getElementById("radius-slider"));
   });
 
-  // Gradient picker (safe if missing CSS)
-  function applyGradTheme(val) {
-  document.body.classList.remove("g1", "g2", "g3");
-  document.body.classList.add(val);
-  try { localStorage.setItem("gradTheme", val); } catch {}
+  // Gradient theme picker
+  const gradSel = document.getElementById("grad-theme");
+  const savedGrad = (() => { try { return localStorage.getItem("gradTheme"); } catch { return null; } })();
 
-  // update slider gradient fill after theme changes
-  setRangeFill(document.getElementById("radius-slider"));
-}
+  if (savedGrad && ["g1", "g2", "g3"].includes(savedGrad)) {
+    if (gradSel) gradSel.value = savedGrad;
+    applyGradTheme(savedGrad);
+  } else {
+    applyGradTheme("g1");
+  }
 
-const gradSel = document.getElementById("grad-theme");
-const savedGrad = (() => { try { return localStorage.getItem("gradTheme"); } catch { return null; } })();
+  gradSel?.addEventListener("change", (e) => applyGradTheme(e.target.value));
 
-if (savedGrad && ["g1", "g2", "g3"].includes(savedGrad)) {
-  if (gradSel) gradSel.value = savedGrad;
-  applyGradTheme(savedGrad);
-} else {
-  applyGradTheme("g1");
-}
+  // Preset picker
+  document.getElementById("preset-theme")?.addEventListener("change", (e) => {
+    const v = e.target.value;
+    if (!v || v === "custom") return;
+    applyPreset(v);
+  });
 
-gradSel?.addEventListener("change", (e) => {
-  applyGradTheme(e.target.value);
-});
-
-
-  // Place type
+  // Place type buttons
   function setType(t) {
     placeType = t;
     setOn("type-cafe", t === "cafe");
@@ -863,8 +1038,6 @@ gradSel?.addEventListener("change", (e) => {
   document.getElementById("type-night")?.addEventListener("click", () => setType("night"));
   setType("cafe");
 
-  updateRadiusUI();
-
   // Use my location
   document.getElementById("loc-btn")?.addEventListener("click", () => {
     if (!navigator.geolocation) return renderMsg("Geolocation not supported.");
@@ -874,8 +1047,6 @@ gradSel?.addEventListener("change", (e) => {
         const lat = pos.coords.latitude;
         const lon = pos.coords.longitude;
         userLatLon = { lat, lon };
-        updateRadiusUI();
-
 
         if (userMarker) map.removeLayer(userMarker);
 
@@ -886,17 +1057,19 @@ gradSel?.addEventListener("change", (e) => {
           opacity: 1,
           fillOpacity: 1,
           color: a.color,
-          fillColor: a.fillColor
+          fillColor: a.fillColor,
+          className: "user-dot"
         }).addTo(map).bindPopup("You").openPopup();
 
         map.setView([lat, lon], 15);
         renderMsg(`Location set: ${lat.toFixed(5)}, ${lon.toFixed(5)}.`);
+        updateRadiusUI();
       },
       (err) => renderMsg(`Location error: ${err.message}`)
     );
   });
 
-  // Radius slider (debounced auto refresh)
+  // Radius chip
   const chip = document.getElementById("radius-chip");
   const chipBtn = document.getElementById("radius-chip-btn");
   const rEl = document.getElementById("radius-slider");
@@ -912,37 +1085,48 @@ gradSel?.addEventListener("change", (e) => {
   setRangeFill(rEl);
 
   chipBtn?.addEventListener("click", () => {
-  if (!hasNearbyAnchor()) return;
-  chip?.classList.toggle("is-open");
-});
+    if (!hasNearbyAnchor()) return;
+    chip?.classList.toggle("is-open");
+  });
 
   let nearbyDebounce = null;
   rEl?.addEventListener("input", (e) => {
-  nearbyRadiusM = Number(e.target.value) || 1400;
-  setRadiusLabel(nearbyRadiusM);
-  setRangeFill(rEl);
+    nearbyRadiusM = Number(e.target.value) || 1400;
+    setRadiusLabel(nearbyRadiusM);
+    setRangeFill(rEl);
 
-  clearTimeout(nearbyDebounce);
-  nearbyDebounce = setTimeout(() => {
-    const anchor = getAnchorLatLonForRecommendations();
-    if (anchor) recommendNearby();
-  }, 500);
+    clearTimeout(nearbyDebounce);
+    nearbyDebounce = setTimeout(() => {
+      const anchor = getAnchorLatLonForRecommendations();
+      if (anchor) recommendNearby();
+    }, 500);
   });
 
   // Recommend nearby button
   document.getElementById("nearby-btn")?.addEventListener("click", recommendNearby);
 
+  // Heatmap toggle
+  document.getElementById("heatmap-toggle")?.addEventListener("click", () => {
+    heatOn = !heatOn;
+    setOn("heatmap-toggle", heatOn);
+    buildHeatFromReco();
+    showToast(heatOn ? "Heatmap ON" : "Heatmap OFF");
+  });
+
+  // Optimize button
+  document.getElementById("optimize-btn")?.addEventListener("click", optimizeCurrentRoute);
+
   // Clear
   document.getElementById("clear-btn")?.addEventListener("click", () => {
     currPois = [];
-    plotPois();
+    poiLayer.clearLayers();
     recoLayer.clearLayers();
-    searchLayer.clearLayers();
+    heatLayer.clearLayers();
     clearRoute();
-    updateRadiusUI();
     lastOrder = null;
     lastLabel = "";
-    setAlgoActive("");
+    updateRadiusUI();
+    document.getElementById("optimize-btn")?.setAttribute("disabled", "true");
     renderMsg("Cleared. Add stops or tap “Recommend nearby”.");
   });
 
@@ -969,9 +1153,7 @@ gradSel?.addEventListener("change", (e) => {
         const lat = Number(hit.lat);
         const lon = Number(hit.lon);
         const name = hit.display_name.split(",")[0];
-
         addPOI(name, lat, lon);
-        map.setView([lat, lon], 15);
 
         qEl.value = "";
         resultsEl.innerHTML = "";
@@ -995,10 +1177,8 @@ gradSel?.addEventListener("change", (e) => {
     const name = hit.display_name.split(",")[0];
 
     addPOI(name, lat, lon);
-    map.setView([lat, lon], 15);
-
-    if (qEl) qEl.value = "";
-    if (resultsEl) resultsEl.innerHTML = "";
+    qEl.value = "";
+    resultsEl.innerHTML = "";
   });
 
   qEl?.addEventListener("keydown", (e) => {
@@ -1008,44 +1188,46 @@ gradSel?.addEventListener("change", (e) => {
   // Algorithms
   document.getElementById("algo-nn")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
-    setAlgoActive("algo-nn");
     const order = getBaseOrder();
     lastOrder = order.slice();
     lastLabel = "Route (NN)";
-    drawRoute(order);
-    renderRoute(order, lastLabel);
+    drawRoute(lastOrder);
+    renderRoute(lastOrder, lastLabel);
+    document.getElementById("optimize-btn")?.removeAttribute("disabled");
   });
 
   document.getElementById("algo-2opt")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
-    setAlgoActive("algo-2opt");
     const order = twoOpt(getBaseOrder().slice());
     lastOrder = order.slice();
     lastLabel = "Route (NN + 2-opt)";
-    drawRoute(order);
-    renderRoute(order, lastLabel);
+    drawRoute(lastOrder);
+    renderRoute(lastOrder, lastLabel);
+    document.getElementById("optimize-btn")?.removeAttribute("disabled");
   });
 
   document.getElementById("algo-sa")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
-    setAlgoActive("algo-sa");
     const base = twoOpt(getBaseOrder().slice());
     const order = saOrder(base, 2500);
     lastOrder = order.slice();
     lastLabel = "Route (SA)";
-    drawRoute(order);
-    renderRoute(order, lastLabel);
+    drawRoute(lastOrder);
+    renderRoute(lastOrder, lastLabel);
+    document.getElementById("optimize-btn")?.removeAttribute("disabled");
   });
 
   document.getElementById("algo-ga")?.addEventListener("click", () => {
     if (currPois.length < 2) return;
-    setAlgoActive("algo-ga");
     const order = gaLite(40);
     lastOrder = order.slice();
     lastLabel = "Route (GA-lite)";
-    drawRoute(order);
-    renderRoute(order, lastLabel);
+    drawRoute(lastOrder);
+    renderRoute(lastOrder, lastLabel);
+    document.getElementById("optimize-btn")?.removeAttribute("disabled");
   });
+
+  updateRadiusUI();
 }
 
 window.addEventListener("DOMContentLoaded", () => {

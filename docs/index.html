@@ -27,29 +27,49 @@
       <div class="controls">
         <button id="loc-btn" type="button">Use my location</button>
 
-        <!-- Recommend nearby + radius slider -->
         <div class="nearby-wrap">
           <button id="nearby-btn" type="button">Recommend nearby</button>
 
-          <label class="radius">
-            <span class="switch-label">Radius</span>
-            <input id="radius-slider" type="range" min="300" max="5000" step="100" value="1400" />
-            <span id="radius-val" class="radius-val">1.4 km</span>
-          </label>
+          <!-- Radius chip -->
+          <div id="radius-chip" class="radius-chip is-disabled" title="Set My Location or POI[0] to enable">
+            <button id="radius-chip-btn" class="radius-chip-btn" type="button">
+              Radius: <span id="radius-val">1.4 km</span>
+              <span class="chev">▾</span>
+            </button>
+
+            <div class="radius-panel">
+              <div class="radius-row">
+                <span class="radius-label">Radius</span>
+                <input id="radius-slider" type="range" min="300" max="5000" step="100" value="1400" />
+              </div>
+              <div class="radius-hint">Auto-refreshes nearby results.</div>
+            </div>
+          </div>
         </div>
 
-        <button class="ghost" id="start-toggle" type="button" title="Toggle start mode">
-          Start: POI[0]
-        </button>
-
-        <button class="ghost" id="loop-toggle" type="button" title="Toggle loop vs one-way">
-          Loop: ON
-        </button>
+        <button class="ghost" id="start-toggle" type="button" title="Toggle start mode">Start: POI[0]</button>
+        <button class="ghost" id="loop-toggle" type="button" title="Toggle loop vs one-way">Loop: ON</button>
 
         <button id="algo-nn" type="button" disabled>NN</button>
         <button id="algo-2opt" type="button" disabled>NN + 2-opt</button>
         <button id="algo-sa" type="button" disabled>SA</button>
         <button id="algo-ga" type="button" disabled>GA-lite</button>
+
+        <button class="ghost" id="optimize-btn" type="button" disabled title="Improve the current route">Optimize</button>
+
+        <button class="ghost" id="heatmap-toggle" type="button" title="Toggle heatmap">Heatmap</button>
+
+        <label class="preset-picker">
+          <span class="switch-label">Preset</span>
+          <select id="preset-theme">
+            <option value="custom" selected>Custom</option>
+            <option value="daycrawl">☀️ Day Crawl</option>
+            <option value="nightout">🌙 Night Out</option>
+            <option value="cozy">☕ Cozy</option>
+            <option value="party">🎉 Party</option>
+            <option value="slowwalk">🧘 Slow Walk</option>
+          </select>
+        </label>
       </div>
 
       <!-- Search -->
@@ -96,6 +116,6 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=1"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>

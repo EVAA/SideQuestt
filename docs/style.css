@@ -583,4 +583,57 @@ body.dark #radius-slider::-webkit-slider-thumb{
   border: 2px solid rgba(255,255,255,0.20);
 }
 
+/* ----- sticky stats bar ----- */
+.statsbar{
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 10px;
+  margin: -6px -6px 10px -6px;
+  border-radius: 18px;
+  backdrop-filter: blur(10px);
+  background: rgba(255,255,255,0.72);
+  border: 1px solid rgba(0,0,0,0.08);
+}
+body.dark .statsbar{
+  background: rgba(8,12,24,0.65);
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.stats-left{ display:flex; flex-wrap: wrap; gap:8px; align-items:center; }
+.stats-right{ display:flex; gap:8px; align-items:center; }
+
+/* ----- list hover highlight ----- */
+.route-bubbles .bubble.is-hover{
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(0,0,0,0.18);
+}
+body.dark .route-bubbles .bubble.is-hover{
+  box-shadow: 0 16px 30px rgba(0,0,0,0.55);
+}
+
+/* ----- marker glow in night mode ----- */
+body.dark .leaflet-overlay-pane .route-line{
+  filter: drop-shadow(0 0 10px rgba(255,31,122,0.50)) drop-shadow(0 0 18px rgba(255,31,122,0.22));
+}
+body.dark .leaflet-overlay-pane .poi-dot,
+body.dark .leaflet-overlay-pane .reco-dot,
+body.dark .leaflet-overlay-pane .user-dot{
+  filter: drop-shadow(0 0 8px rgba(255,31,122,0.45));
+}
+
+/* ----- arrow markers ----- */
+.route-arrow-inner{
+  color: var(--arrow);
+  font-size: 18px;
+  text-shadow: 0 10px 18px rgba(0,0,0,0.35);
+}
+
+/* ----- simple heat blobs ----- */
+.heat-blob{ filter: blur(1px); }
+
 
