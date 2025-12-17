@@ -1,6 +1,4 @@
 console.log("app.js loaded");
-let userPickedGradient = false;
-
 
 const out = document.getElementById("out");
 
@@ -59,6 +57,9 @@ let lastOrder = null;
 let lastLabel = "";
 let heatOn = false;
 
+let badgeMarkers = []; // {pos, marker}
+let userPickedGradient = false;
+
 // ===== UI helpers =====
 function setOutHTML(html) { out.innerHTML = html; }
 
@@ -81,9 +82,8 @@ function setOn(id, on) {
 function updateStartToggle() {
   const btn = document.getElementById("start-toggle");
   if (!btn) return;
-  btn.textContent = (startMode === "poi0") ? "Starting point: POI[0]" : "Starting point: My Location";
+  btn.textContent = (startMode === "poi0") ? "Start: First stop" : "Start: My location";
 }
-
 
 function enableAlgos(ok) {
   ["algo-nn", "algo-2opt", "algo-sa", "algo-ga"].forEach(id => {
@@ -116,7 +116,7 @@ function walkTimeStrFromKm(km) {
   return `${h} h ${m} min`;
 }
 
-// ===== Accent color (blue day, hot pink night) =====
+// ===== Accent style (blue day, hot pink night) =====
 function accentStyle() {
   const isNight = document.body.classList.contains("dark");
   if (isNight) return { color: "#ff1f7a", fillColor: "#ff1f7a" };
@@ -125,54 +125,13 @@ function accentStyle() {
 
 function refreshMapStyles() {
   const a = accentStyle();
-
   poiLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
   recoLayer.eachLayer(l => l?.setStyle?.({ color: a.color, fillColor: a.fillColor }));
   if (routeLine?.setStyle) routeLine.setStyle({ color: a.color });
   if (userMarker?.setStyle) userMarker.setStyle({ color: a.color, fillColor: a.fillColor });
 
+  if (heatOn) buildHeatFromReco();
   if (lastOrder && lastOrder.length) drawRouteBadges(lastOrder);
-}
-
-// ===== Helpers: route points + google maps route link =====
-function getStartPointForRoute() {
-  if (startMode === "user" && userLatLon) return { lat: userLatLon.lat, lon: userLatLon.lon, name: "You" };
-  if (currPois.length) return { lat: currPois[0].lat, lon: currPois[0].lon, name: currPois[0].name };
-  return null;
-}
-
-function buildRoutePoints(order) {
-  if (!order || !order.length) return [];
-
-  if (startMode === "user" && userLatLon) {
-    const pts = [{ lat: userLatLon.lat, lon: userLatLon.lon, name: "You", kind: "start" }];
-    order.forEach(idx => pts.push({ lat: currPois[idx].lat, lon: currPois[idx].lon, name: currPois[idx].name, kind: "poi", idx }));
-    if (loopMode) pts.push({ lat: userLatLon.lat, lon: userLatLon.lon, name: "You", kind: "end" });
-    return pts;
-  }
-
-  const pts = order.map(idx => ({ lat: currPois[idx].lat, lon: currPois[idx].lon, name: currPois[idx].name, kind: "poi", idx }));
-  if (loopMode) pts.push({ lat: currPois[order[0]].lat, lon: currPois[order[0]].lon, name: currPois[order[0]].name, kind: "end" });
-  return pts;
-}
-
-function googleMapsFullRouteUrl(order) {
-  // Google Maps URL supports origin + destination + waypoints (walking)
-  const pts = buildRoutePoints(order);
-  if (pts.length < 2) return null;
-
-  const origin = `${pts[0].lat},${pts[0].lon}`;
-  const destination = `${pts[pts.length - 1].lat},${pts[pts.length - 1].lon}`;
-
-  // intermediates excluding first and last
-  const mids = pts.slice(1, -1).map(p => `${p.lat},${p.lon}`);
-  const wp = mids.length ? `&waypoints=${encodeURIComponent(mids.join("|"))}` : "";
-
-  return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${wp}&travelmode=walking`;
-}
-
-function gmapsDirUrl(a, b) {
-  return `https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lon}&destination=${b.lat},${b.lon}&travelmode=walking`;
 }
 
 // ===== Distances =====
@@ -215,6 +174,37 @@ function routeLengthKm(order) {
   for (let i = 0; i < order.length - 1; i++) tot += distPois(order[i], order[i + 1]);
   if (loopMode) tot += distPois(order[order.length - 1], order[0]);
   return tot;
+}
+
+// ===== Route points =====
+function buildRoutePoints(order) {
+  if (!order || !order.length) return [];
+
+  if (startMode === "user" && userLatLon) {
+    const pts = [{ lat: userLatLon.lat, lon: userLatLon.lon, name: "You", kind: "start" }];
+    order.forEach(idx => pts.push({ lat: currPois[idx].lat, lon: currPois[idx].lon, name: currPois[idx].name, kind: "poi", idx }));
+    if (loopMode) pts.push({ lat: userLatLon.lat, lon: userLatLon.lon, name: "You", kind: "end" });
+    return pts;
+  }
+
+  const pts = order.map(idx => ({ lat: currPois[idx].lat, lon: currPois[idx].lon, name: currPois[idx].name, kind: "poi", idx }));
+  if (loopMode) pts.push({ lat: currPois[order[0]].lat, lon: currPois[order[0]].lon, name: currPois[order[0]].name, kind: "end" });
+  return pts;
+}
+
+function googleMapsFullRouteUrl(order) {
+  const pts = buildRoutePoints(order);
+  if (pts.length < 2) return null;
+
+  const origin = `${pts[0].lat},${pts[0].lon}`;
+  const destination = `${pts[pts.length - 1].lat},${pts[pts.length - 1].lon}`;
+  const mids = pts.slice(1, -1).map(p => `${p.lat},${p.lon}`);
+  const wp = mids.length ? `&waypoints=${encodeURIComponent(mids.join("|"))}` : "";
+  return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}${wp}&travelmode=walking`;
+}
+
+function gmapsDirUrl(a, b) {
+  return `https://www.google.com/maps/dir/?api=1&origin=${a.lat},${a.lon}&destination=${b.lat},${b.lon}&travelmode=walking`;
 }
 
 // ===== Algorithms =====
@@ -366,13 +356,11 @@ function drawRouteArrows(points) {
   routeArrowLayer.clearLayers();
   if (!points || points.length < 2) return;
 
-  const a = accentStyle();
+  const a = accentStyle(); // hot pink in night mode
 
   for (let i = 0; i < points.length - 1; i++) {
     const p1 = points[i];
     const p2 = points[i + 1];
-
-    // midpoint
     const mid = { lat: (p1.lat + p2.lat) / 2, lon: (p1.lon + p2.lon) / 2 };
     const ang = bearingDeg(p1, p2);
 
@@ -396,14 +384,11 @@ function startDashAnimation() {
   dashAnimTimer = setInterval(() => {
     if (!routeLine) return;
     off = (off - 2) % 1000;
-    try {
-      routeLine.setStyle({ dashOffset: String(off) });
-    } catch {}
+    try { routeLine.setStyle({ dashOffset: String(off) }); } catch {}
   }, 60);
 }
 
 // ===== Badges (hover sync) =====
-let badgeMarkers = []; // {pos, marker}
 function clearBadgeMarkers() {
   badgeMarkers = [];
   routeBadgeLayer.clearLayers();
@@ -420,7 +405,6 @@ function drawRouteBadges(order) {
   if (!order || !order.length) return;
 
   const seq = [];
-
   if (startMode === "user" && userLatLon) {
     seq.push({ lat: userLatLon.lat, lon: userLatLon.lon, pos: 1, name: "You" });
     order.forEach((idx, k) => {
@@ -454,7 +438,7 @@ function drawRouteBadges(order) {
   });
 }
 
-// ===== Draw + Output =====
+// ===== Clear route =====
 function clearRoute() {
   if (routeLine) map.removeLayer(routeLine);
   routeLine = null;
@@ -466,6 +450,7 @@ function clearRoute() {
   clearBadgeMarkers();
 }
 
+// ===== Plot POIs =====
 function plotPois() {
   poiLayer.clearLayers();
   clearRoute();
@@ -485,9 +470,10 @@ function plotPois() {
   });
 
   enableAlgos(currPois.length >= 2);
-  document.getElementById("optimize-btn")?.toggleAttribute("disabled", !lastOrder);
+  document.getElementById("optimize-btn")?.toggleAttribute("disabled", !(lastOrder && lastOrder.length));
 }
 
+// ===== Draw route =====
 function drawRoute(order) {
   if (!order || !order.length) return;
 
@@ -508,7 +494,6 @@ function drawRoute(order) {
     className: "route-line"
   }).addTo(map);
 
-  // animated drawing (point-by-point)
   let i = 1;
   routeAnimTimer = setInterval(() => {
     if (!routeLine) return;
@@ -538,42 +523,39 @@ function buildHeatFromReco() {
     buckets.set(key, (buckets.get(key) || 0) + 1);
   });
 
-  const a = accentStyle();
+  const a = accentStyle(); // hot pink in night mode
+
   buckets.forEach((cnt, key) => {
     const [latS, lonS] = key.split(",");
     const lat = Number(latS), lon = Number(lonS);
-    const r = Math.min(40, 10 + cnt * 6);
+    const r = Math.min(42, 10 + cnt * 6);
 
     L.circleMarker([lat, lon], {
       radius: r,
       weight: 0,
       opacity: 0,
-      fillOpacity: 0.10,
+      fillOpacity: 0.16,
       fillColor: a.color,
       className: "heat-blob"
     }).addTo(heatLayer);
   });
 }
 
-// ===== Route rendering + hover sync + per-leg directions + full route link =====
+// ===== Route rendering (legs + full route) =====
 function renderRoute(order, label) {
   const km = routeLengthKm(order);
   const walkStr = walkTimeStrFromKm(km);
   const fullUrl = googleMapsFullRouteUrl(order);
 
-  const items = [];
   const pts = buildRoutePoints(order);
-
-  // Build list items for EACH point in pts (excluding final duplicate return bubble; we still show separately)
-  // Numbering matches badges.
   const showReturn = loopMode && pts.length >= 2;
 
-  // For leg directions: pos i -> pos i+1 (based on list numbering)
+  const items = [];
+
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i];
     const pos = i + 1;
 
-    // Next point for directions (not for the very last point)
     let legUrl = null;
     let legLabel = "";
     if (i < pts.length - 1) {
@@ -581,10 +563,8 @@ function renderRoute(order, label) {
       legLabel = `${pos} → ${pos + 1}`;
     }
 
-    // If this is the last point and it is the return-to-start point, we skip listing it as a normal stop bubble
     if (showReturn && i === pts.length - 1) break;
 
-    // Remove button only for actual POIs
     const canRemove = (p.kind === "poi") && (typeof p.idx === "number");
 
     items.push(`
@@ -602,7 +582,6 @@ function renderRoute(order, label) {
     `);
   }
 
-  // Return bubble (visual only)
   if (showReturn) {
     const pos = pts.length;
     const destName = (startMode === "user" && userLatLon) ? "You" : (currPois.length ? currPois[0].name : "Start");
@@ -618,10 +597,6 @@ function renderRoute(order, label) {
     `);
   }
 
-  const improveInfo = (lastOrder && lastOrder.length)
-    ? `<span class="chip">Walk: ${safe(walkStr)}</span>`
-    : "";
-
   setOutHTML(`
     <div class="statsbar">
       <div class="stats-left">
@@ -634,10 +609,11 @@ function renderRoute(order, label) {
         ${fullUrl ? `<a class="pill" href="${fullUrl}" target="_blank" rel="noopener">Open full route in Google Maps</a>` : ""}
       </div>
     </div>
+
     <ol class="route-bubbles">${items.join("")}</ol>
   `);
 
-  // hover sync: list -> badge
+  // list -> badge hover
   document.querySelectorAll(".route-bubbles .bubble[data-pos]").forEach(li => {
     li.addEventListener("mouseenter", () => {
       const pos = Number(li.getAttribute("data-pos"));
@@ -662,20 +638,21 @@ function renderRoute(order, label) {
       lastOrder = null;
       lastLabel = "";
       plotPois();
+      updateRadiusUI();
       renderMsg("Removed stop. Re-run an algorithm.");
     });
   });
 
-  // enable optimize if we have a route
   document.getElementById("optimize-btn")?.toggleAttribute("disabled", !(lastOrder && lastOrder.length));
 }
 
+// ===== Add POI =====
 function addPOI(name, lat, lon) {
   currPois.push({ name, lat, lon });
   plotPois();
   map.setView([lat, lon], 15);
-  renderMsg(`Added: ${name}.`);
   updateRadiusUI();
+  renderMsg(`Added: ${name}.`);
 }
 
 // ===== Search =====
@@ -726,7 +703,6 @@ function scoreReco(el) {
   return named * 100 + tagCount;
 }
 
-// Recommendation markers: popup with name + button
 function addRecoMarker(p) {
   const lat = p.lat;
   const lon = p.lon;
@@ -768,7 +744,7 @@ function addRecoMarker(p) {
 
 async function recommendNearby() {
   const anchor = getAnchorLatLonForRecommendations();
-  if (!anchor) return renderMsg("Tap “Use my location” or add a first stop (POI[0]) first.");
+  if (!anchor) return renderMsg("Tap “Use my location” or add your first stop first.");
 
   const radiusM = Number(document.getElementById("radius-slider")?.value) || nearbyRadiusM || 1400;
   const f = overpassAmenityFilter();
@@ -821,7 +797,6 @@ out center tags;
     map.fitBounds(bounds, { padding: [20, 20] });
 
     showToast(`Found ${top.length}`);
-
   } catch (e) {
     console.error(e);
     renderMsg(`Nearby search failed: ${e?.message || "unknown error"}`);
@@ -852,6 +827,14 @@ function updateRadiusUI() {
   setRangeFill(slider);
 }
 
+// ===== Gradient theme =====
+function applyGradTheme(val) {
+  document.body.classList.remove("g1", "g2", "g3");
+  document.body.classList.add(val);
+  try { localStorage.setItem("gradTheme", val); } catch {}
+  setRangeFill(document.getElementById("radius-slider"));
+}
+
 // ===== Presets =====
 function applyPreset(name) {
   const nightToggle = document.getElementById("night-toggle");
@@ -867,10 +850,10 @@ function applyPreset(name) {
   };
 
   if (name === "daycrawl") {
-    nightToggle && (nightToggle.checked = false);
+    if (nightToggle) nightToggle.checked = false;
     document.body.classList.toggle("dark", false);
     setBasemap(false);
-    gradSel && (gradSel.value = "g1");
+    if (gradSel) gradSel.value = "g1";
     applyGradTheme("g1");
     placeType = "cafe";
     setRad(1400);
@@ -878,10 +861,10 @@ function applyPreset(name) {
   }
 
   if (name === "nightout") {
-    nightToggle && (nightToggle.checked = true);
+    if (nightToggle) nightToggle.checked = true;
     document.body.classList.toggle("dark", true);
     setBasemap(true);
-    gradSel && (gradSel.value = "g3");
+    if (gradSel) gradSel.value = "g3";
     applyGradTheme("g3");
     placeType = "night";
     setRad(2200);
@@ -889,10 +872,10 @@ function applyPreset(name) {
   }
 
   if (name === "cozy") {
-    nightToggle && (nightToggle.checked = false);
+    if (nightToggle) nightToggle.checked = false;
     document.body.classList.toggle("dark", false);
     setBasemap(false);
-    gradSel && (gradSel.value = "g2");
+    if (gradSel) gradSel.value = "g2";
     applyGradTheme("g2");
     placeType = "cafe";
     setRad(900);
@@ -900,10 +883,10 @@ function applyPreset(name) {
   }
 
   if (name === "party") {
-    nightToggle && (nightToggle.checked = true);
+    if (nightToggle) nightToggle.checked = true;
     document.body.classList.toggle("dark", true);
     setBasemap(true);
-    gradSel && (gradSel.value = "g3");
+    if (gradSel) gradSel.value = "g3";
     applyGradTheme("g3");
     placeType = "night";
     setRad(3000);
@@ -911,10 +894,10 @@ function applyPreset(name) {
   }
 
   if (name === "slowwalk") {
-    nightToggle && (nightToggle.checked = false);
+    if (nightToggle) nightToggle.checked = false;
     document.body.classList.toggle("dark", false);
     setBasemap(false);
-    gradSel && (gradSel.value = "g1");
+    if (gradSel) gradSel.value = "g1";
     applyGradTheme("g1");
     placeType = "cafe";
     setRad(700);
@@ -922,18 +905,11 @@ function applyPreset(name) {
   }
 
   updateStartToggle();
-  document.getElementById("loop-toggle") && (document.getElementById("loop-toggle").textContent = loopMode ? "Loop: ON" : "Loop: OFF");
+  const loopBtn = document.getElementById("loop-toggle");
+  if (loopBtn) loopBtn.textContent = loopMode ? "Loop: ON" : "Loop: OFF";
   refreshMapStyles();
   updateRadiusUI();
   renderMsg(`Preset applied: ${name}`);
-}
-
-// ===== Gradient theme =====
-function applyGradTheme(val) {
-  document.body.classList.remove("g1", "g2", "g3");
-  document.body.classList.add(val);
-  try { localStorage.setItem("gradTheme", val); } catch {}
-  setRangeFill(document.getElementById("radius-slider"));
 }
 
 // ===== Optimize current route =====
@@ -942,7 +918,6 @@ function optimizeCurrentRoute() {
 
   const before = routeLengthKm(lastOrder);
 
-  // quick polish: 2-opt then short SA
   let cand = twoOpt(lastOrder.slice());
   cand = saOrder(cand, 1200);
 
@@ -962,7 +937,6 @@ function bindUI() {
   enableAlgos(false);
   updateStartToggle();
 
-  // Loop toggle
   function updateLoopToggle() {
     const b = document.getElementById("loop-toggle");
     if (!b) return;
@@ -983,7 +957,6 @@ function bindUI() {
     renderMsg(loopMode ? "Loop enabled: will return to start." : "One-way: ends at last stop.");
   });
 
-  // Start toggle
   document.getElementById("start-toggle")?.addEventListener("click", () => {
     startMode = (startMode === "poi0") ? "user" : "poi0";
     updateStartToggle();
@@ -997,32 +970,30 @@ function bindUI() {
 
     renderMsg(startMode === "user"
       ? "Start set to My Location (tap 'Use my location' to update it)."
-      : "Start set to POI[0]."
+      : "Start set to First stop."
     );
   });
 
-  // Night mode
+  // Night mode (default gradient day=g1, night=g3 unless user changed)
   document.getElementById("night-toggle")?.addEventListener("change", (e) => {
-  const on = !!e.target.checked;
-  document.body.classList.toggle("dark", on);
-  setBasemap(on);
+    const on = !!e.target.checked;
+    document.body.classList.toggle("dark", on);
+    setBasemap(on);
 
-  // Default gradient logic (only if user hasn't customized)
-  if (!userPickedGradient) {
-    const gradSel = document.getElementById("grad-theme");
-    if (on) {
-      if (gradSel) gradSel.value = "g3";
-      applyGradTheme("g3"); // red/dark pink/purple
-    } else {
-      if (gradSel) gradSel.value = "g1";
-      applyGradTheme("g1"); // purple/blue/green
+    if (!userPickedGradient) {
+      const gradSel = document.getElementById("grad-theme");
+      if (on) {
+        if (gradSel) gradSel.value = "g3";
+        applyGradTheme("g3");
+      } else {
+        if (gradSel) gradSel.value = "g1";
+        applyGradTheme("g1");
+      }
     }
-  }
 
-  refreshMapStyles();
-  setRangeFill(document.getElementById("radius-slider"));
-});
-
+    refreshMapStyles();
+    setRangeFill(document.getElementById("radius-slider"));
+  });
 
   // Gradient theme picker
   const gradSel = document.getElementById("grad-theme");
@@ -1036,10 +1007,9 @@ function bindUI() {
   }
 
   gradSel?.addEventListener("change", (e) => {
-  userPickedGradient = true;
-  applyGradTheme(e.target.value);
-});
-
+    userPickedGradient = true;
+    applyGradTheme(e.target.value);
+  });
 
   // Preset picker
   document.getElementById("preset-theme")?.addEventListener("change", (e) => {
@@ -1048,7 +1018,7 @@ function bindUI() {
     applyPreset(v);
   });
 
-  // Place type buttons
+  // Place type
   function setType(t) {
     placeType = t;
     setOn("type-cafe", t === "cafe");
@@ -1123,7 +1093,6 @@ function bindUI() {
     }, 500);
   });
 
-  // Recommend nearby button
   document.getElementById("nearby-btn")?.addEventListener("click", recommendNearby);
 
   // Heatmap toggle
@@ -1134,7 +1103,7 @@ function bindUI() {
     showToast(heatOn ? "Heatmap ON" : "Heatmap OFF");
   });
 
-  // Optimize button
+  // Optimize
   document.getElementById("optimize-btn")?.addEventListener("click", optimizeCurrentRoute);
 
   // Clear

@@ -20,21 +20,16 @@
             <p class="sub">Toronto • day + night planner</p>
           </div>
         </div>
-        <button class="ghost" id="start-toggle" type="button" title="Toggle start mode">
-            Starting point: POI[0]
-        </button>
-
+        <button class="ghost" id="clear-btn" type="button">Clear</button>
       </div>
 
-      <!-- Controls row -->
       <div class="controls">
         <button id="loc-btn" type="button">Use my location</button>
 
         <div class="nearby-wrap">
           <button id="nearby-btn" type="button">Recommend nearby</button>
 
-          <!-- Radius chip -->
-          <div id="radius-chip" class="radius-chip is-disabled" title="Set My Location or POI[0] to enable">
+          <div id="radius-chip" class="radius-chip is-disabled" title="Set My Location or First Stop to enable">
             <button id="radius-chip-btn" class="radius-chip-btn" type="button">
               Radius: <span id="radius-val">1.4 km</span>
               <span class="chev">▾</span>
@@ -50,16 +45,20 @@
           </div>
         </div>
 
-        <button class="ghost" id="start-toggle" type="button" title="Toggle start mode">Start: POI[0]</button>
-        <button class="ghost" id="loop-toggle" type="button" title="Toggle loop vs one-way">Loop: ON</button>
+        <button class="ghost" id="start-toggle" type="button" title="Toggle start mode">
+          Start: First stop
+        </button>
+
+        <button class="ghost" id="loop-toggle" type="button" title="Toggle loop vs one-way">
+          Loop: ON
+        </button>
 
         <button id="algo-nn" type="button" disabled>NN</button>
         <button id="algo-2opt" type="button" disabled>NN + 2-opt</button>
         <button id="algo-sa" type="button" disabled>SA</button>
         <button id="algo-ga" type="button" disabled>GA-lite</button>
 
-        <button class="ghost" id="optimize-btn" type="button" disabled title="Improve the current route">Optimize</button>
-
+        <button class="ghost" id="optimize-btn" type="button" disabled title="Improve current route">Optimize</button>
         <button class="ghost" id="heatmap-toggle" type="button" title="Toggle heatmap">Heatmap</button>
 
         <label class="preset-picker">
@@ -75,14 +74,12 @@
         </label>
       </div>
 
-      <!-- Search -->
       <div class="search">
         <input id="search-q" type="text" placeholder="Search & add a stop (e.g. 'Bar Raval', 'Pilot Coffee', 'CN Tower')" />
         <button id="search-add-btn" type="button">Add</button>
         <div id="search-results" class="search-results"></div>
       </div>
 
-      <!-- Toggles -->
       <div class="toggles">
         <div class="seg seg-2" role="group" aria-label="Place type">
           <button id="type-cafe" class="seg-btn" type="button">Cafés</button>
@@ -119,6 +116,6 @@
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=999"></script>
 </body>
 </html>
