@@ -525,3 +525,18 @@ button.ghost.is-selected{
   background: var(--grad) !important;
 }
 
+/* Fix route row spacing: keep name/hint left, actions pinned right */
+.bubble{
+  justify-content: flex-start !important;
+}
+
+.bubble > div:nth-child(2){
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.bubble .row-actions{
+  margin-left: auto;
+}
+
+
