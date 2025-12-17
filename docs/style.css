@@ -724,6 +724,18 @@ body.dark a.pill:focus{
   outline-offset: 2px;
 }
 
+/* Force route arrows to be hot pink in night mode */
+body.dark .route-arrow-inner{
+  color: #ff1f7a !important;
+}
+/* Heatmap should be hot pink in night mode */
+body.dark .heat-blob{
+  filter: blur(3px) drop-shadow(0 0 18px rgba(255,31,122,0.55));
+  mix-blend-mode: screen;
+}
+
+
+
 
 
 

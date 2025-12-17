@@ -1,4 +1,6 @@
 console.log("app.js loaded");
+let userPickedGradient = false;
+
 
 const out = document.getElementById("out");
 
@@ -79,8 +81,9 @@ function setOn(id, on) {
 function updateStartToggle() {
   const btn = document.getElementById("start-toggle");
   if (!btn) return;
-  btn.textContent = (startMode === "poi0") ? "Start: POI[0]" : "Start: My Location";
+  btn.textContent = (startMode === "poi0") ? "Starting point: POI[0]" : "Starting point: My Location";
 }
+
 
 function enableAlgos(ok) {
   ["algo-nn", "algo-2opt", "algo-sa", "algo-ga"].forEach(id => {
@@ -1000,12 +1003,26 @@ function bindUI() {
 
   // Night mode
   document.getElementById("night-toggle")?.addEventListener("change", (e) => {
-    const on = !!e.target.checked;
-    document.body.classList.toggle("dark", on);
-    setBasemap(on);
-    refreshMapStyles();
-    setRangeFill(document.getElementById("radius-slider"));
-  });
+  const on = !!e.target.checked;
+  document.body.classList.toggle("dark", on);
+  setBasemap(on);
+
+  // Default gradient logic (only if user hasn't customized)
+  if (!userPickedGradient) {
+    const gradSel = document.getElementById("grad-theme");
+    if (on) {
+      if (gradSel) gradSel.value = "g3";
+      applyGradTheme("g3"); // red/dark pink/purple
+    } else {
+      if (gradSel) gradSel.value = "g1";
+      applyGradTheme("g1"); // purple/blue/green
+    }
+  }
+
+  refreshMapStyles();
+  setRangeFill(document.getElementById("radius-slider"));
+});
+
 
   // Gradient theme picker
   const gradSel = document.getElementById("grad-theme");
@@ -1018,7 +1035,11 @@ function bindUI() {
     applyGradTheme("g1");
   }
 
-  gradSel?.addEventListener("change", (e) => applyGradTheme(e.target.value));
+  gradSel?.addEventListener("change", (e) => {
+  userPickedGradient = true;
+  applyGradTheme(e.target.value);
+});
+
 
   // Preset picker
   document.getElementById("preset-theme")?.addEventListener("change", (e) => {
