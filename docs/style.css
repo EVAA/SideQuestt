@@ -592,20 +592,34 @@ body.dark #radius-slider::-webkit-slider-thumb{
   align-items:center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 10px;
+  padding: 10px 12px;
   margin: -6px -6px 10px -6px;
   border-radius: 18px;
   backdrop-filter: blur(10px);
   background: rgba(255,255,255,0.72);
   border: 1px solid rgba(0,0,0,0.08);
 }
-body.dark .statsbar{
-  background: rgba(8,12,24,0.65);
-  border: 1px solid rgba(255,255,255,0.10);
+
+.stats-left{
+  display:flex;
+  flex-wrap: wrap;
+  gap:8px;
+  align-items:center;
+  min-width: 0; /* important for flex overflow */
 }
 
-.stats-left{ display:flex; flex-wrap: wrap; gap:8px; align-items:center; }
-.stats-right{ display:flex; gap:8px; align-items:center; }
+.stats-right{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex: 0 0 auto;
+}
+
+/* keep the link on one line and align it nicely */
+.stats-right .pill{
+  white-space: nowrap;
+}
+
 
 /* ----- list hover highlight ----- */
 .route-bubbles .bubble.is-hover{
@@ -633,7 +647,83 @@ body.dark .leaflet-overlay-pane .user-dot{
   text-shadow: 0 10px 18px rgba(0,0,0,0.35);
 }
 
-/* ----- simple heat blobs ----- */
-.heat-blob{ filter: blur(1px); }
+/* Heatmap should look like a heatmap */
+.heat-blob{
+  filter: blur(2px);
+  mix-blend-mode: multiply;
+}
+
+body.dark .heat-blob{
+  mix-blend-mode: screen;
+  filter: blur(3px) drop-shadow(0 0 16px rgba(255,31,122,0.45));
+}
+/* ---------- Night mode: make panels + inputs higher contrast ---------- */
+body.dark .panel,
+body.dark .out,
+body.dark .radius-panel{
+  background: rgba(10,14,26,0.92);
+  border: 1px solid rgba(255,255,255,0.14);
+}
+
+/* Route list items (bubbles) */
+body.dark .route-bubbles .bubble{
+  background: rgba(12,18,34,0.94);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.92);
+}
+
+body.dark .route-bubbles .hint{
+  color: rgba(255,255,255,0.65);
+}
+
+/* Make the statsbar more contrast in night mode */
+body.dark .statsbar{
+  background: rgba(10,14,26,0.88);
+  border: 1px solid rgba(255,255,255,0.16);
+}
+
+/* Make chips stand out */
+body.dark .chip{
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  color: rgba(255,255,255,0.92);
+}
+
+/* Make dropdowns high contrast */
+body.dark select,
+body.dark .grad-picker select,
+body.dark .preset-picker select{
+  background: rgba(12,18,34,0.96);
+  color: rgba(255,255,255,0.94);
+  border: 1px solid rgba(255,255,255,0.20);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.45);
+}
+
+/* Dropdown label text */
+body.dark .switch-label{
+  color: rgba(255,255,255,0.78);
+}
+
+/* "Open full route" should look like a button in night mode */
+body.dark .stats-right .pill{
+  background: rgba(255,31,122,0.16);
+  border: 1px solid rgba(255,31,122,0.50);
+  color: rgba(255,255,255,0.95);
+  text-decoration: none;
+}
+
+body.dark .stats-right .pill:hover{
+  background: rgba(255,31,122,0.22);
+}
+
+/* Improve focus visibility */
+body.dark select:focus,
+body.dark button:focus,
+body.dark a.pill:focus{
+  outline: 2px solid rgba(255,31,122,0.65);
+  outline-offset: 2px;
+}
+
+
 
 
